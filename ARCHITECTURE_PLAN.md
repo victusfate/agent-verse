@@ -258,6 +258,12 @@ Storage abstraction interfaces:
 - Recursion/budget guards.
 - Basic memory tiers (ephemeral + session).
 
+### Milestone 1.5 — Reliability qualification (gate before MCP expansion)
+- Simulation harness with at least 100 seeded scenarios per policy change.
+- Red-team suite (prompt injection, boundary bypass, dependency deadlock, retry storms).
+- Shadow mode runner comparing agent-proposed actions vs human-selected actions.
+- Reliability scorecard: task success rate, unsafe-action catch rate, false-positive block rate, mean time to escalation.
+
 ### Milestone 2 — MCP/skill integration
 - At least one MCP server adapter.
 - Skill registry + typed execution contracts.
