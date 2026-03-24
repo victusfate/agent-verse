@@ -37,7 +37,7 @@ Why:
 
 ## 3) Core System Model
 
-## 3.1 Agent hierarchy
+### 3.1 Agent hierarchy
 - **L0 Orchestrator**: owns global objective, budget, policy constraints.
 - **L1 Coordinators**: decompose into sub-goals by domain (research, coding, QA, ops).
 - **L2+ Specialists**: execute focused tasks (retrieval, schema migration, MCP calls, etc).
@@ -48,7 +48,11 @@ Each agent node has:
 - `policy envelope` (budget, depth, tools, auth scope)
 - `state snapshot ref`
 
-## 3.2 Message-based communication
+Tasks on the shared TaskBoard carry explicit lifecycle states:
+`pending` → `in_progress` → `completed` | `failed` | `blocked`
+Blocked tasks are unblocked deterministically when their dependencies resolve.
+
+### 3.2 Message-based communication
 Use an internal typed event bus (local in-process first, pluggable queue later).
 
 Message envelope:
@@ -66,6 +70,15 @@ Semantics:
 - At-least-once delivery + dedupe by `idempotency_key`.
 - Mandatory ACK for task delegation.
 - Result messages include confidence and evidence references.
+
+### Inbox API
+Each agent has a typed inbox supporting direct and broadcast messaging:
+- `send(to, message)`
+- `broadcast(message)`
+- `receive() -> message`
+- `peek() -> message | null`
+
+Per-agent queue metrics are tracked as observability events. Required swarm-control tool ABI: `task_update`, `task_list`, `inbox_send`, `inbox_receive`.
 
 ---
 
@@ -134,10 +147,15 @@ Safety:
 - MCP/skill execution sandbox profiles.
 - Output validation schemas.
 - Circuit breakers for failing tools.
+- Schema validation required for every tool call proposal before execution.
+- Confidence band routing defaults:
+  - High confidence: auto-execute,
+  - Medium confidence: queue for review,
+  - Low confidence: block + explain.
 
 ---
 
-## 7) Recursion, Loop Prevention & Budgeting
+## 7) Recursion, Loop Prevention, Budgeting & Risk Controls
 
 To avoid infinite loops and token exhaustion:
 
@@ -156,6 +174,16 @@ Adaptive policies:
 - If confidence decreasing over k iterations -> stop/delegate/escalate.
 - If marginal utility of new info below threshold -> summarize and return.
 
+Risk tiers:
+Each tool/action carries a risk tier (`low`, `medium`, `high`, `critical`) with default enforcement:
+- `low`: autonomous execution,
+- `medium`: conditional confidence gate,
+- `high`/`critical`: manager approval required.
+
+Action cost units:
+- Each action carries a cost weight; per-session and per-agent budgets are enforced.
+- Budget events: `budget.consumed`, `budget.threshold_reached`, `budget.exhausted`.
+
 Escalation:
 - Standard `escalate` message with reason codes:
   - `insufficient_context`
@@ -163,6 +191,9 @@ Escalation:
   - `budget_exhausted`
   - `uncertain_result`
   - `external_dependency_failure`
+  - `risk_gate_blocked`
+  - `confidence_below_threshold`
+  - `rate_limit_exceeded`
 - Escalation target: human manager or external orchestrator.
 
 ---
@@ -183,13 +214,24 @@ Suggested event types:
 - `goal.decomposed`
 - `task.delegated`
 - `task.started`
+- `task.status.changed`
+- `task.unblocked`
 - `tool.called`
 - `tool.result`
 - `memory.updated`
 - `policy.denied`
 - `agent.escalated`
+- `budget.consumed`
+- `budget.threshold_reached`
+- `budget.exhausted`
 - `task.completed`
 - `session.completed`
+
+Trace metadata (captured by default):
+- prompt/context hash,
+- tool arguments/result hashes,
+- model + temperature,
+- policy decisions.
 
 Admin dashboard (v1):
 - DAG view of agent hierarchy + state badges.
@@ -197,6 +239,12 @@ Admin dashboard (v1):
 - Budget panel: token/cost/time consumption.
 - Escalation inbox for human approvals.
 - Replay mode for postmortems.
+
+Dashboard upgrades (v1.1 scope):
+- **Autonomy Mode Panel**: current HITL mode per agent (on/in/with-the-loop).
+- **Risk/Budget Timeline**: action-cost burn visualization.
+- **Failure Mode Lens**: classify incidents as recoverable/detectable/undetectable.
+- Sampled audit queue for periodic human review of autonomous actions.
 
 Implementation note:
 - Keep domain model UI-agnostic; expose GraphQL/REST + websocket stream.
@@ -224,13 +272,15 @@ Implementation note:
 - Unified hierarchical recursion controls + budget governance.
 - Native MCP + skill capability mediation with auth envelopes.
 - Deterministic replay and idempotent state reconstruction tuned for agents.
+- First-class swarm coordination: TaskBoard with dependency DAG, typed Inbox, and swarm-control tool ABI.
+- Risk-tier autonomy controls with action cost units and confidence-band routing built into the runtime.
 
 ---
 
 ## 10) Proposed OSS Architecture (TypeScript v1)
 
 Packages:
-- `@agentverse/core` — agent model, planner interfaces, policies.
+- `@agentverse/core` — agent model, planner interfaces, policies, TaskBoard API (dependency DAG + deterministic unblocking), Inbox API.
 - `@agentverse/runtime` — execution loop, delegation engine, recursion guards.
 - `@agentverse/memory` — memory adapters + summarization policies.
 - `@agentverse/auth` — capability tokens and policy checks.
@@ -250,13 +300,22 @@ Storage abstraction interfaces:
 
 ### Milestone 0 — RFC + contracts
 - Define message schema and task DAG model.
+- Define TaskBoard API (dependency DAG, lifecycle states, deterministic unblocking).
+- Define Inbox API (`send`, `broadcast`, `receive`, `peek`) and swarm-control tool ABI.
 - Define event taxonomy and idempotency semantics.
 - Define auth capability model.
+- Define risk tier taxonomy and action cost model.
 
 ### Milestone 1 — Core runtime
 - Single-process orchestrator + 2-level delegation.
 - Recursion/budget guards.
 - Basic memory tiers (ephemeral + session).
+
+### Milestone 1.5 — Reliability qualification (gate before MCP expansion)
+- Simulation harness with at least 100 seeded scenarios per policy change.
+- Red-team suite (prompt injection, boundary bypass, dependency deadlock, retry storms).
+- Shadow mode runner comparing agent-proposed actions vs human-selected actions.
+- Reliability scorecard: task success rate, unsafe-action catch rate, false-positive block rate, mean time to escalation.
 
 ### Milestone 2 — MCP/skill integration
 - At least one MCP server adapter.
@@ -276,15 +335,12 @@ Storage abstraction interfaces:
 - How strict should determinism be across LLM model versions?
 - Should delegation policy be static config, learned, or hybrid?
 - What is the default trust policy for third-party MCP servers?
-- Which persistence backend should be default for local development?
+- ~~Which persistence backend should be default for local development?~~ **Resolved (Section 15):** SQLite for event store + dedupe; JSON blobs for snapshots; in-memory vector store.
 
 ---
 
 ## 13) Practical Next Step
-Create an RFC repository skeleton with:
-1. Protocol schema (`messages`, `events`, `policies`).
-2. Runtime execution state machine.
-3. One end-to-end demo: orchestrator -> specialist -> MCP tool -> result -> dashboard event trail.
+_TBD_
 
 
 ---
@@ -334,5 +390,87 @@ Create an RFC repository skeleton with:
   - privileged MCP tools,
   - cross-tenant memory reads,
   - policy override requests.
+- Default HITL mode: **human-on-the-loop** (monitor); escalate to human-in-the-loop for high/critical risk actions.
+- Graduated autonomy: read-only and low-risk actions execute autonomously; higher-risk actions require approval.
 
 These are defaults, not fixed policy; all values should be overrideable at session and tenant scopes.
+
+---
+
+## 16) External Article Synthesis (March 2026)
+
+### A) ClawTeam implementation walkthrough (MarkTechPost, March 20, 2026)
+Key ideas worth carrying forward:
+- **Leader + specialists pattern is operationally practical**: a leader decomposes a high-level goal into 3–5 concrete tasks with role assignments and explicit dependencies.
+- **Shared task board as system-of-record**: task lifecycle (`pending`, `blocked`, `in_progress`, `completed`, `failed`) and dependency unblocking are treated as first-class runtime mechanics.
+- **Function-calling as execution ABI**: tools like `task_update`, `inbox_send`, `inbox_receive`, and `task_list` form a stable action surface between agents and runtime.
+- **Inbox messaging model**: direct and broadcast communication between agents provides low-friction coordination.
+- **Live operator visibility**: a Kanban/roster-style dashboard and final leader synthesis make multi-agent behavior reviewable.
+- **Infra-light reproducibility**: core swarm patterns can run without heavyweight process infrastructure, which is useful for quick onboarding and local demos.
+
+### B) Reliability/testing for autonomous agents (VentureBeat, March 22, 2026)
+Key ideas worth carrying forward:
+- **Layered reliability over prompt-only optimism**:
+  1. Model/prompt quality,
+  2. Deterministic validation guardrails,
+  3. Confidence/uncertainty routing,
+  4. Full observability/auditability.
+- **Graduated autonomy**: start read-only and low-risk actions first; require approval for higher-risk actions.
+- **Action-cost budgets**: treat actions as risk/cost-weighted operations with per-agent/session budget throttles.
+- **Operational boundaries**: hard limits on retries, rate, tokens, and side effects to prevent runaway loops.
+- **Agent-specific testing strategy**: simulation at scale, adversarial red teaming, and shadow mode before autonomous launch.
+- **Explicit HITL modes**: human-on-the-loop (monitor), human-in-the-loop (approve), human-with-the-loop (collaborative).
+- **Failure taxonomy + recovery**: recoverable vs detectable vs undetectable failures; use audit sampling to catch silent drift.
+
+---
+
+## 17) Adaptations to this plan
+
+### 17.1 Protocol and runtime additions
+- Add `task.status.changed` and `task.unblocked` as required event types.
+- Add a typed **TaskBoard API** in `@agentverse/core` with dependency DAG semantics and deterministic unblocking.
+- Add a minimal **Inbox API** (`send`, `broadcast`, `receive`, `peek`) with per-agent queue metrics.
+- Add an explicit tool ABI profile for swarm-control actions (`task_update`, `task_list`, `inbox_send`, `inbox_receive`).
+
+### 17.2 Risk-aware autonomy controls
+- Introduce a **risk tier** per tool/action (`low`, `medium`, `high`, `critical`) and map to default enforcement:
+  - `low`: autonomous,
+  - `medium`: conditional confidence gate,
+  - `high`/`critical`: manager approval required.
+- Add **action cost units** and per-session/per-agent budgets with events:
+  - `budget.consumed`, `budget.threshold_reached`, `budget.exhausted`.
+- Extend escalation reasons with:
+  - `risk_gate_blocked`,
+  - `confidence_below_threshold`,
+  - `rate_limit_exceeded`.
+
+### 17.3 Reliability pipeline hardening
+- Require schema validation for every tool call proposal before execution.
+- Add confidence band routing defaults:
+  - High confidence: auto-execute,
+  - Medium confidence: queue for review,
+  - Low confidence: block + explain.
+- Capture richer trace metadata by default:
+  - prompt/context hash,
+  - tool arguments/result hashes,
+  - model + temperature,
+  - policy decisions.
+
+### 17.4 Test strategy milestone
+Milestone 1.5 — Reliability Qualification (added to Section 11):
+- Simulation harness with at least 100 seeded scenarios per policy change.
+- Red-team suite (prompt injection, boundary bypass, dependency deadlock, retry storms).
+- Shadow mode runner that compares agent-proposed actions vs human-selected actions.
+- Reliability scorecard: task success rate, unsafe-action catch rate, false-positive block rate, mean time to escalation.
+
+### 17.5 Dashboard upgrades (v1.1 scope)
+- Add **Autonomy Mode Panel** showing current mode per agent (on/in/with-the-loop).
+- Add **Risk/Budget Timeline** with action-cost burn visualization.
+- Add **Failure Mode Lens** classifying incidents as recoverable/detectable/undetectable.
+- Add sampled audit queue for periodic human review of “successful” autonomous actions.
+
+### 17.6 Immediate implementation sequence
+1. Start with Milestone 0 contracts plus TaskBoard + Inbox interfaces.
+2. Implement Milestone 1 runtime with deterministic guardrails + risk tiers + action-cost budgets.
+3. Complete Milestone 1.5 reliability qualification before broad MCP expansion.
+4. Proceed to Milestone 2 MCP/skills with the same risk and validation envelopes.
