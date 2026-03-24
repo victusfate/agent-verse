@@ -37,7 +37,7 @@ Why:
 
 ## 3) Core System Model
 
-## 3.1 Agent hierarchy
+### 3.1 Agent hierarchy
 - **L0 Orchestrator**: owns global objective, budget, policy constraints.
 - **L1 Coordinators**: decompose into sub-goals by domain (research, coding, QA, ops).
 - **L2+ Specialists**: execute focused tasks (retrieval, schema migration, MCP calls, etc).
@@ -48,7 +48,11 @@ Each agent node has:
 - `policy envelope` (budget, depth, tools, auth scope)
 - `state snapshot ref`
 
-## 3.2 Message-based communication
+Tasks on the shared TaskBoard carry explicit lifecycle states:
+`pending` → `in_progress` → `completed` | `failed` | `blocked`
+Blocked tasks are unblocked deterministically when their dependencies resolve.
+
+### 3.2 Message-based communication
 Use an internal typed event bus (local in-process first, pluggable queue later).
 
 Message envelope:
@@ -151,7 +155,7 @@ Safety:
 
 ---
 
-## 7) Recursion, Loop Prevention & Budgeting
+## 7) Recursion, Loop Prevention, Budgeting & Risk Controls
 
 To avoid infinite loops and token exhaustion:
 
@@ -268,6 +272,8 @@ Implementation note:
 - Unified hierarchical recursion controls + budget governance.
 - Native MCP + skill capability mediation with auth envelopes.
 - Deterministic replay and idempotent state reconstruction tuned for agents.
+- First-class swarm coordination: TaskBoard with dependency DAG, typed Inbox, and swarm-control tool ABI.
+- Risk-tier autonomy controls with action cost units and confidence-band routing built into the runtime.
 
 ---
 
@@ -294,8 +300,11 @@ Storage abstraction interfaces:
 
 ### Milestone 0 — RFC + contracts
 - Define message schema and task DAG model.
+- Define TaskBoard API (dependency DAG, lifecycle states, deterministic unblocking).
+- Define Inbox API (`send`, `broadcast`, `receive`, `peek`) and swarm-control tool ABI.
 - Define event taxonomy and idempotency semantics.
 - Define auth capability model.
+- Define risk tier taxonomy and action cost model.
 
 ### Milestone 1 — Core runtime
 - Single-process orchestrator + 2-level delegation.
@@ -326,15 +335,12 @@ Storage abstraction interfaces:
 - How strict should determinism be across LLM model versions?
 - Should delegation policy be static config, learned, or hybrid?
 - What is the default trust policy for third-party MCP servers?
-- Which persistence backend should be default for local development?
+- ~~Which persistence backend should be default for local development?~~ **Resolved (Section 15):** SQLite for event store + dedupe; JSON blobs for snapshots; in-memory vector store.
 
 ---
 
 ## 13) Practical Next Step
-Create an RFC repository skeleton with:
-1. Protocol schema (`messages`, `events`, `policies`).
-2. Runtime execution state machine.
-3. One end-to-end demo: orchestrator -> specialist -> MCP tool -> result -> dashboard event trail.
+_TBD_
 
 
 ---
