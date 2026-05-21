@@ -1,15 +1,17 @@
 node_modules/
+**/node_modules/
+
 dist/
+**/dist/
 build/
+**/build/
 coverage/
+**/coverage/
 
 *.lock
 *.min.js
 
 .DS_Store
-.env
-.env.local
-.claude/settings.local.json
 
 # Python
 __pycache__/
@@ -20,6 +22,4 @@ __pycache__/
 venv/
 
 # Runtime output
-companies/ledger.db
-companies/*/
-!companies/.gitkeep
+companies/
