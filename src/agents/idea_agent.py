@@ -1,15 +1,10 @@
 """Phase 1 — Idea-Agent: market scan + standardized venture payload generation."""
 from __future__ import annotations
 
-import json
-import os
-
-import anthropic
 from pydantic import ValidationError
 
+from src.llm import call_tool, current_model
 from src.schemas import VenturePayload
-
-MODEL = os.environ.get("AGENT_MODEL", "claude-sonnet-4-6")
 
 VENTURE_TOOL = {
     "name": "submit_venture_payload",
@@ -17,7 +12,7 @@ VENTURE_TOOL = {
         "Format and submit a validated micro-business venture concept "
         "as a structured enterprise payload."
     ),
-    "input_schema": {
+    "parameters": {
         "type": "object",
         "properties": {
             "company_name": {
@@ -63,31 +58,19 @@ You MUST use the submit_venture_payload tool to output your idea. Do not describ
 
 def run(seed_prompt: str | None = None) -> VenturePayload:
     """Generate a venture payload. Optionally seed with a domain hint."""
-    client = anthropic.Anthropic()
-
     user_message = seed_prompt or (
         "Scan the current API ecosystem and identify one high-value micro-business "
         "opportunity that AI agents can execute autonomously. Focus on B2B tooling, "
         "developer infrastructure, or AI-augmented workflows."
     )
 
-    print("[Idea-Agent] Generating venture concept...")
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        tools=[VENTURE_TOOL],
-        tool_choice={"type": "any"},
-        messages=[{"role": "user", "content": user_message}],
-    )
+    print(f"[Idea-Agent] Generating venture concept... (model={current_model()})")
+    args = call_tool(system=SYSTEM_PROMPT, user=user_message, tool=VENTURE_TOOL, max_tokens=1024)
 
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "submit_venture_payload":
-            try:
-                payload = VenturePayload(**block.input)
-                print(f"[Idea-Agent] ✓ Venture identified: {payload.company_name}")
-                return payload
-            except ValidationError as e:
-                raise RuntimeError(f"Idea-Agent produced invalid schema: {e}") from e
+    try:
+        payload = VenturePayload(**args)
+    except ValidationError as e:
+        raise RuntimeError(f"Idea-Agent produced invalid schema: {e}") from e
 
-    raise RuntimeError("Idea-Agent did not call submit_venture_payload")
+    print(f"[Idea-Agent] ✓ Venture identified: {payload.company_name}")
+    return payload

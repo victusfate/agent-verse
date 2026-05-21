@@ -8,20 +8,16 @@ Layer 5 — LEARNING:     Packages the full invocation stack and writes telemetr
 """
 from __future__ import annotations
 
-import os
 from typing import Any
 
-import anthropic
-
 from src import company_brain, ledger
+from src.llm import call_tool
 from src.schemas import OperatorTask, PolicyDecision, QualityGateResult, TelemetryEntry
-
-MODEL = os.environ.get("AGENT_MODEL", "claude-sonnet-4-6")
 
 EXECUTE_TOOL = {
     "name": "execute_task",
     "description": "Execute the assigned operator task and return a structured result.",
-    "input_schema": {
+    "parameters": {
         "type": "object",
         "properties": {
             "deliverable": {
@@ -50,7 +46,7 @@ EXECUTE_TOOL = {
 POLICY_TOOL = {
     "name": "policy_decision",
     "description": "Evaluate the task against company policy and return a risk decision.",
-    "input_schema": {
+    "parameters": {
         "type": "object",
         "properties": {
             "allowed": {"type": "boolean"},
@@ -66,7 +62,6 @@ POLICY_TOOL = {
 # ---------- Layer 2: Policy ----------
 
 def _policy_check(task: OperatorTask, skills: str) -> PolicyDecision:
-    client = anthropic.Anthropic()
     context = company_brain.read_context_framework(task.company_id)
     budget_remaining = context.get("token_budget_usd", 50.0) - context.get("tokens_consumed_usd", 0.0)
 
@@ -79,24 +74,18 @@ def _policy_check(task: OperatorTask, skills: str) -> PolicyDecision:
         "- Escalate to human if risk is HIGH or CRITICAL\n"
         f"- Remaining token budget: ${budget_remaining:.2f} USD"
     )
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=512,
+    args = call_tool(
         system=system,
-        tools=[POLICY_TOOL],
-        tool_choice={"type": "any"},
-        messages=[{"role": "user", "content": f"Evaluate task:\n{task.description}"}],
+        user=f"Evaluate task:\n{task.description}",
+        tool=POLICY_TOOL,
+        max_tokens=512,
     )
-    for block in resp.content:
-        if block.type == "tool_use" and block.name == "policy_decision":
-            return PolicyDecision(**block.input)
-    return PolicyDecision(allowed=True, risk_tier="low", reason="policy check inconclusive", escalate_to_human=False)
+    return PolicyDecision(**args)
 
 
 # ---------- Layer 3: Tool Execution ----------
 
 def _execute(task: OperatorTask, skills: str, context_framework: dict) -> dict[str, Any]:
-    client = anthropic.Anthropic()
     role_context = {
         "product": "You are the Product-Agent. Produce product specs, user stories, and go-to-market copy.",
         "engineering": "You are the Engineering-Agent. Write code, API schemas, database queries, and technical specs.",
@@ -108,18 +97,12 @@ def _execute(task: OperatorTask, skills: str, context_framework: dict) -> dict[s
         f"Company skills:\n{skills[:2000]}\n\n"
         "Use the execute_task tool to return your deliverable."
     )
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=2048,
+    return call_tool(
         system=system,
-        tools=[EXECUTE_TOOL],
-        tool_choice={"type": "any"},
-        messages=[{"role": "user", "content": f"Execute this task:\n\n{task.description}"}],
+        user=f"Execute this task:\n\n{task.description}",
+        tool=EXECUTE_TOOL,
+        max_tokens=2048,
     )
-    for block in resp.content:
-        if block.type == "tool_use" and block.name == "execute_task":
-            return block.input
-    return {"deliverable": "No output", "artifacts": [], "confidence": 0.0, "next_actions": []}
 
 
 # ---------- Layer 4: Quality Gate ----------

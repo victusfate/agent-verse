@@ -1,26 +1,17 @@
-"""Phase 2 — CEO-Agent: executive orchestrator.
-
-Receives the venture payload, initialises the Total Legibility datastore,
-writes the Company Brain files, and provisions Operator-Agent task list.
-"""
+"""Phase 2 — CEO-Agent: executive orchestrator."""
 from __future__ import annotations
 
 import json
-import os
 import re
-import uuid
-
-import anthropic
 
 from src import company_brain, ledger
-from src.schemas import CompanyContext, OperatorTask, VenturePayload
-
-MODEL = os.environ.get("AGENT_MODEL", "claude-sonnet-4-6")
+from src.llm import call_tool
+from src.schemas import OperatorTask, VenturePayload
 
 BRAIN_TOOL = {
     "name": "initialise_company_brain",
     "description": "Write the initial context_framework and skills baseline for the new company.",
-    "input_schema": {
+    "parameters": {
         "type": "object",
         "properties": {
             "context_framework": {
@@ -33,7 +24,7 @@ BRAIN_TOOL = {
             },
             "operator_tasks": {
                 "type": "array",
-                "description": "Initial task list for Product, Engineering, and Customer-Success agents.",
+                "description": "Initial task list — exactly one for Product, Engineering, and Customer-Success.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -66,13 +57,8 @@ Be specific and actionable. Each task description should be a complete, executab
 
 
 def run(venture: VenturePayload) -> tuple[str, list[OperatorTask]]:
-    """
-    Initialise the company and return (company_id, operator_tasks).
-    Side-effects: writes Company Brain files, creates ledger records.
-    """
-    client = anthropic.Anthropic()
+    """Initialise the company and return (company_id, operator_tasks)."""
     company_id = re.sub(r"[^a-z0-9-]", "-", venture.company_name.lower())[:40]
-
     print(f"[CEO-Agent] Provisioning company: {company_id}")
 
     # Task 2.1 — initialise the datastore
@@ -85,60 +71,47 @@ def run(venture: VenturePayload) -> tuple[str, list[OperatorTask]]:
     )
 
     venture_summary = json.dumps(venture.model_dump(), indent=2)
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=2048,
+    inp = call_tool(
         system=SYSTEM_PROMPT,
-        tools=[BRAIN_TOOL],
-        tool_choice={"type": "any"},
-        messages=[
-            {
-                "role": "user",
-                "content": f"Initialise company for this venture:\n\n{venture_summary}",
-            }
-        ],
+        user=f"Initialise company for this venture:\n\n{venture_summary}",
+        tool=BRAIN_TOOL,
+        max_tokens=2048,
     )
 
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "initialise_company_brain":
-            inp = block.input
+    # Task 2.2 — write Company Brain files
+    context = {
+        **inp["context_framework"],
+        "company_id": company_id,
+        "venture": venture.model_dump(),
+        "token_budget_usd": venture.estimated_token_cost_ceiling_usd,
+    }
+    company_brain.write_context_framework(company_id, context)
+    company_brain.write_skills(company_id, inp["skills_md"])
 
-            # Task 2.2 — write Company Brain files
-            context = {
-                **inp["context_framework"],
-                "company_id": company_id,
-                "venture": venture.model_dump(),
-                "token_budget_usd": venture.estimated_token_cost_ceiling_usd,
-            }
-            company_brain.write_context_framework(company_id, context)
-            company_brain.write_skills(company_id, inp["skills_md"])
+    ledger.record(
+        company_id=company_id,
+        event_type="company.brain.initialised",
+        agent_type="ceo",
+        payload={"context_keys": list(context.keys())},
+    )
+    print(f"[CEO-Agent] ✓ Company Brain written")
 
-            ledger.record(
-                company_id=company_id,
-                event_type="company.brain.initialised",
-                agent_type="ceo",
-                payload={"context_keys": list(context.keys())},
-            )
-            print(f"[CEO-Agent] ✓ Company Brain written")
+    # Task 2.3 — provision operator tasks
+    tasks: list[OperatorTask] = []
+    for raw in inp["operator_tasks"]:
+        task = OperatorTask(
+            company_id=company_id,
+            role=raw["role"],
+            description=raw["description"],
+            risk_tier=raw.get("risk_tier", "low"),
+        )
+        tasks.append(task)
+        ledger.record(
+            company_id=company_id,
+            event_type="task.created",
+            agent_type="ceo",
+            payload=task.model_dump(),
+        )
+        print(f"[CEO-Agent]   → Task [{task.role}]: {task.description[:60]}...")
 
-            # Task 2.3 — provision operator tasks
-            tasks: list[OperatorTask] = []
-            for raw in inp["operator_tasks"]:
-                task = OperatorTask(
-                    company_id=company_id,
-                    role=raw["role"],
-                    description=raw["description"],
-                    risk_tier=raw.get("risk_tier", "low"),
-                )
-                tasks.append(task)
-                ledger.record(
-                    company_id=company_id,
-                    event_type="task.created",
-                    agent_type="ceo",
-                    payload=task.model_dump(),
-                )
-                print(f"[CEO-Agent]   → Task [{task.role}]: {task.description[:60]}...")
-
-            return company_id, tasks
-
-    raise RuntimeError("CEO-Agent did not call initialise_company_brain")
+    return company_id, tasks

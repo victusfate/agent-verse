@@ -39,6 +39,9 @@ class AgentState(TypedDict):
 # ── Node implementations ─────────────────────────────────────────────────────
 
 def idea_node(state: AgentState) -> AgentState:
+    if state.get("venture_payload"):
+        print("[Idea-Agent] Skipped — venture payload pre-supplied.")
+        return state
     payload = idea_agent.run(seed_prompt=state.get("seed_prompt"))
     return {**state, "venture_payload": payload.model_dump()}
 

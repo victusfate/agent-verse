@@ -3,7 +3,10 @@
 Usage:
     python -m src.main
     python -m src.main --seed "AI-powered invoice reconciliation API"
-    python -m src.main --venture '{"company_name":"pdf-ocr-api", ...}'  # skip Idea-Agent
+    python -m src.main --model gpt-4o-mini
+    python -m src.main --model gemini/gemini-2.5-flash
+    python -m src.main --model ollama/llama3.2
+    python -m src.main --venture '{"company_name":"pdf-ocr-api", ...}'
 """
 from __future__ import annotations
 
@@ -21,11 +24,24 @@ except ImportError:
     pass
 
 
-def _check_api_key():
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ERROR: ANTHROPIC_API_KEY is not set.")
-        print("  Copy .env.example → .env and add your key, or export the variable.")
+def _check_credentials(model: str) -> None:
+    """Validate that the API key required by `model` is present."""
+    from src.llm import provider_of, required_env_for
+
+    env_var = required_env_for(model)
+    if env_var is None:
+        # e.g. Ollama — nothing to check; we just hope the daemon is reachable
+        print(f"[startup] Provider: {provider_of(model)} (no API key required)")
+        return
+
+    if not os.environ.get(env_var):
+        print(f"ERROR: ${env_var} is not set, but model '{model}' requires it.")
+        print(f"       Provider: {provider_of(model)}")
+        print(f"       Copy .env.example → .env and set the key, or export it:")
+        print(f"         export {env_var}=...")
         sys.exit(1)
+
+    print(f"[startup] Provider: {provider_of(model)} | Model: {model}")
 
 
 def main():
@@ -34,13 +50,19 @@ def main():
                         help="Optional domain hint for the Idea-Agent")
     parser.add_argument("--venture", type=str, default=None,
                         help="Skip Idea-Agent by providing a raw VenturePayload JSON string")
+    parser.add_argument("--model", type=str, default=None,
+                        help="Override AGENT_MODEL (e.g. gpt-4o-mini, gemini/gemini-2.5-flash, ollama/llama3.2)")
     parser.add_argument("--max-cycles", type=int, default=3,
                         help="Max monitor improvement cycles (default: 3)")
     args = parser.parse_args()
 
-    _check_api_key()
+    # Apply model override before any agent code imports/reads it
+    if args.model:
+        os.environ["AGENT_MODEL"] = args.model
+    model = os.environ.get("AGENT_MODEL", "claude-sonnet-4-6")
 
-    # Patch max cycles into graph module at runtime
+    _check_credentials(model)
+
     import src.graph as graph_module
     graph_module.MAX_MONITOR_CYCLES = args.max_cycles
 
@@ -75,6 +97,7 @@ def main():
     company_id = final_state.get("company_id", "unknown")
     print(f"  Company:   {company_id}")
     print(f"  Cycles:    {final_state.get('cycle', 0)}")
+    print(f"  Model:     {model}")
 
     tasks = final_state.get("operator_tasks", [])
     completed = sum(1 for t in tasks if t.get("status") == "completed")
