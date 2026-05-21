@@ -1,0 +1,4 @@
+anthropic>=0.104.0
+langgraph>=1.2.0
+pydantic>=2.0
+python-dotenv>=1.0
