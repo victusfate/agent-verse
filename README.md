@@ -248,10 +248,13 @@ MonitorReport
 
 ## Quickstart
 
+Requires **Node.js 24 LTS** (`nvm use` picks it up from `.nvmrc`).
+
 ```bash
 # 1. Clone and install
 git clone https://github.com/victusfate/agent-verse
 cd agent-verse
+nvm install   # installs Node 24.16.0 from .nvmrc
 npm install
 
 # 2. Configure credentials
