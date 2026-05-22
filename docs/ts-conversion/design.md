@@ -83,13 +83,33 @@ and stay on current SDK versions.
 keys from env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`,
 `OLLAMA_API_BASE`).
 
-## Open Questions
+## Resolved Decisions (continued)
 
-- D3 — Runtime: Node 22 vs Bun? (pending)
-- D4 — State graph: custom (mirror `graph.py`) vs LangGraph.js? (pending)
-- D5 — Test framework + build tool? (pending)
-- D6 — Validation library: Zod is the obvious default. Confirm. (pending)
-- D7 — Python tree: remove entirely or keep as `python-legacy/`? (pending — user said "full conversion" → leaning remove)
+### D3 — Runtime: Node 22
+
+Already installed (`v22.22.2`). Lower risk than Bun for native modules
+(`better-sqlite3`). TypeScript executed via `tsx` (no build step for dev/run).
+
+### D4 — State graph: custom (no LangGraph.js)
+
+`graph.py` is ~50 lines. Port it as a plain async function in `graph.ts`.
+LangGraph.js adds heavyweight abstractions without benefit at this scale.
+
+### D5 — Build/test: `tsx` + `vitest`
+
+- `tsx` for running TypeScript directly (`npm start` = `tsx src/main.ts`)
+- `vitest` for tests — ESM-native, zero config, fast
+- `tsc --noEmit` for type checking
+
+### D6 — Validation: Zod
+
+Replaces Pydantic. All inter-agent schemas defined as `z.object(...)`, types
+inferred with `z.infer<typeof Schema>`.
+
+### D7 — Python tree: remove entirely
+
+User confirmed "full conversion". All `src/**/*.py`, `requirements.txt`, and
+`__init__.py` files are deleted. `.env.example` and `companies/` are kept.
 
 ## Architecture (preview, subject to remaining decisions)
 
