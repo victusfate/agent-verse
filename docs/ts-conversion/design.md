@@ -62,16 +62,22 @@ Rationale:
   add per-provider complexity without giving us anything we can't get from
   `jsonMode` + prompt-embedded schema.
 
-Provider adapters:
+Provider adapters (one file per provider, using direct SDKs — not an intermediary like token.js):
 
 ```
 src/llm/
   index.ts           # exports Model, LlmProviderType, LlmRequestOptions, factory()
-  anthropic.ts       # AnthropicModel implements Model
-  openai.ts          # OpenAIModel implements Model
-  google.ts          # GoogleModel implements Model
-  local.ts           # LocalModel implements Model (Ollama-compatible)
+  anthropic.ts       # AnthropicModel  — @anthropic-ai/sdk (latest)
+  openai.ts          # OpenAIModel     — openai SDK
+  google.ts          # GoogleModel     — @google/generative-ai
+  local.ts           # LocalModel      — openai SDK pointed at OLLAMA_API_BASE (OpenAI-compat)
 ```
+
+token.js was evaluated and rejected: last release 1 year ago (likely abandoned),
+bundles all 9 provider SDKs unconditionally (adds weight regardless of usage),
+ships a very old `@anthropic-ai/sdk@0.24.3` missing prompt caching and streaming
+improvements, and has no Ollama support. Direct adapters are ~50–80 lines each
+and stay on current SDK versions.
 
 `factory(modelId, provider)` returns the right `Model` instance, reading API
 keys from env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`,
