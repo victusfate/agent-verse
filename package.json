@@ -6,7 +6,7 @@
   "scripts": {
     "start": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' tsx --env-file=.env src/main.ts",
     "dev": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' tsx watch --env-file=.env src/main.ts",
-    "test": "vitest",
+    "test": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' vitest",
     "typecheck": "tsc --noEmit"
   },
 	"dependencies": {
