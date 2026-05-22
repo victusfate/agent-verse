@@ -1,0 +1,25 @@
+{
+  "name": "agent-verse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' tsx --env-file=.env src/main.ts",
+    "dev": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' tsx watch --env-file=.env src/main.ts",
+    "test": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' vitest",
+    "typecheck": "tsc --noEmit"
+  },
+	"dependencies": {
+		"@anthropic-ai/sdk": "^0.98.0",
+		"@google/generative-ai": "^0.24.1",
+		"dotenv": "^17.4.2",
+		"openai": "^6.39.0",
+		"zod": "^4.4.3"
+	},
+	"devDependencies": {
+		"@types/node": "^25.9.1",
+		"tsx": "^4.22.3",
+		"typescript": "^6.0.3",
+		"vitest": "^4.1.7"
+	}
+}
