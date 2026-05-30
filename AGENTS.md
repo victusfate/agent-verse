@@ -1,65 +1,5 @@
 # Agent Guidelines
 
-## Project Overview
-
-**agent-verse** is an autonomous, self-improving corporate AI ecosystem built in Python.
-It implements the four-agent loop described in the blueprint document:
-
-```
-Idea-Agent → CEO-Agent → Operator-Agents (Product / Engineering / Customer-Success)
-                                         ↑                                       |
-                                         └──────── Monitor-Agent ────────────────┘
-```
-
-### Key Files
-
-| Path | Purpose |
-|---|---|
-| `src/main.py` | Entry point — `python -m src.main` |
-| `src/graph.py` | LangGraph state graph wiring all agents together |
-| `src/llm.py` | Unified LiteLLM client (all providers via `AGENT_MODEL`) |
-| `src/agents/` | `idea_agent`, `ceo_agent`, `operator_agent`, `monitor_agent` |
-| `src/ledger.py` | Append-only SQLite event ledger (Total Legibility Layer) |
-| `src/company_brain.py` | `context_framework.json` + `skills.md` per company |
-| `src/schemas.py` | Pydantic models for all inter-agent data |
-| `companies/` | Runtime output — one folder per venture |
-| `requirements.txt` | Python deps |
-
-### Run
-
-```bash
-# copy env template and fill in at least one provider key
-cp .env.example .env
-
-# run with default model (claude-sonnet-4-6)
-python -m src.main
-
-# run with a specific model or seed
-python -m src.main --model gemini/gemini-2.5-flash
-python -m src.main --model gpt-4o-mini --seed "AI invoice reconciliation API"
-python -m src.main --model ollama/llama3.2   # requires local Ollama daemon
-```
-
-### Model Selection
-
-Set `AGENT_MODEL` in `.env` or pass `--model` at runtime:
-
-| Model string | Provider | Required env var |
-|---|---|---|
-| `claude-sonnet-4-6` (default) | Anthropic | `ANTHROPIC_API_KEY` |
-| `gpt-4o-mini` | OpenAI | `OPENAI_API_KEY` |
-| `gemini/gemini-2.5-flash` | Google Gemini | `GEMINI_API_KEY` |
-| `ollama/llama3.2` | Local Ollama | none (needs daemon) |
-| `openrouter/<vendor>/<model>` | OpenRouter | `OPENROUTER_API_KEY` |
-
-### Architecture Constraints (from blueprint)
-
-1. **Total Legibility** — every event writes to `companies/ledger.db` (SQLite append-only).
-2. **Ephemeral Software** — `companies/<id>/` is runtime state; the source in `src/` is the durable asset.
-3. **Human-at-the-Edge** — agents auto-escalate high/critical risk tasks; humans only intervene at those gates.
-
----
-
 ## Session Start
 
 On your first response in a new session, check `./docs/` for existing feature
@@ -88,7 +28,8 @@ Run `/feature-chain` to execute all phases automatically. Or invoke individually
 
 1. **Design** — `/grill-with-docs`. Interview one question at a time until
    the design tree is resolved. Produces `design.md` with Q&A, decisions, and
-   a **canonical vocabulary**. Auto-advances to PRD when complete.
+   a **canonical vocabulary**. Run `/design-review` (auto-fix mode) before
+   advancing — patches `design.md` directly. Auto-advances to PRD when complete.
 
 2. **PRD** — `/to-prd`. Synthesize context and codebase into `prd.md` without
    re-interviewing. Auto-advances to TDD when complete.
@@ -98,7 +39,9 @@ Run `/feature-chain` to execute all phases automatically. Or invoke individually
    once before coding.
 
 4. **TDD** — `/tdd`. Execute `plan.md` one slice at a time: RED → GREEN →
-   REFACTOR. Maintain `tdd-log.md` with per-slice status.
+   REFACTOR. When all slices pass, run `/code-quality-review` (auto-fix mode)
+   — patches source files directly before advancing to the review summary.
+   Maintain `tdd-log.md` with per-slice status.
 
 **Stop** the chain at any point by saying "stop", "pause", or "just answer".
 
