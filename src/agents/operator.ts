@@ -147,7 +147,6 @@ export async function run(task: OperatorTask): Promise<OperatorTask> {
 
     if (policy.escalate_to_human) {
       console.log(`[Operator:${task.role}] ⚡ Escalating to Supervisor (risk=${policy.risk_tier})`);
-      const ctx = brain.readContextFramework(task.company_id);
       const budgetCtx = {
         token_budget_usd: Number(ctx['token_budget_usd'] ?? 50),
         tokens_consumed_usd: Number(ctx['tokens_consumed_usd'] ?? 0),

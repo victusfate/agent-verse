@@ -40,10 +40,7 @@ export function handleEventsStream(db: DatabaseSync, req: http.IncomingMessage, 
   const poll = () => {
     if (aborted) return;
     try {
-      const rows = (db.prepare(
-        'SELECT id, ts, company_id, event_type, agent_type, payload FROM events WHERE company_id = ? AND id > ? ORDER BY id ASC'
-      ).all(company_id, lastId) as RawRow[]).map(r => ({ ...r, payload: JSON.parse(r.payload) }));
-
+      const rows = queryEvents(db, company_id, lastId);
       for (const row of rows) {
         lastId = (row as { id: number }).id;
         res.write(`data: ${JSON.stringify(row)}\n\n`);
