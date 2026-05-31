@@ -4,15 +4,13 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=26.2.0"
+    "node": ">=26.0.0"
   },
   "scripts": {
-    "start": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' tsx --env-file=.env src/main.ts",
-    "dev": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' tsx watch --env-file=.env src/main.ts",
-    "test": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' vitest",
-    "typecheck": "tsc --noEmit",
-    "test:cli-agent": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' vitest run src/__tests__/cli-agent.smoke.test.ts",
-    "dashboard": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' tsx src/server/index.ts"
+    "start": "tsx --env-file=.env src/main.ts",
+    "dev": "tsx watch --env-file=.env src/main.ts",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
   },
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.98.0",
