@@ -4,7 +4,7 @@
  * Capable of driving OpenAI, Anthropic, Google Gemini, and Local/Custom LLMs (Ollama).
  */
 
-export type LlmProviderType = 'google' | 'openai' | 'anthropic' | 'local';
+export type LlmProviderType = 'google' | 'openai' | 'anthropic' | 'local' | 'cli' | 'simulated';
 
 export interface LlmRequestOptions {
   /**
@@ -56,6 +56,8 @@ export interface Model {
 
 export function detectProvider(modelId: string): LlmProviderType {
   const id = modelId.toLowerCase();
+  if (id.startsWith('cli:')) return 'cli';
+  if (id === 'simulated' || id.startsWith('simulated:')) return 'simulated';
   if (id.startsWith('claude') || id.startsWith('anthropic/')) return 'anthropic';
   if (id.startsWith('gemini') || id.startsWith('google/')) return 'google';
   if (id.startsWith('gpt') || id.startsWith('o1') || id.startsWith('o3') || id.startsWith('o4') || id.startsWith('openai/')) return 'openai';
@@ -64,7 +66,7 @@ export function detectProvider(modelId: string): LlmProviderType {
 }
 
 export function stripProviderPrefix(modelId: string): string {
-  return modelId.replace(/^(anthropic|google|openai|ollama)\//, '');
+  return modelId.replace(/^(anthropic|google|openai|ollama)\//, '').replace(/^cli:/, '');
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────────
@@ -93,6 +95,14 @@ export async function createModel(
     case 'local': {
       const { LocalModel } = await import('./local.js');
       return new LocalModel(id);
+    }
+    case 'cli': {
+      const { CliModel } = await import('./cli.js');
+      return new CliModel(id);
+    }
+    case 'simulated': {
+      const { SimulatedModel } = await import('./simulated.js');
+      return new SimulatedModel();
     }
     default:
       throw new Error(`Unknown provider: ${resolvedProvider as string}`);
