@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=26.2.0"
+  },
   "scripts": {
     "start": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' tsx --env-file=.env src/main.ts",
     "dev": "NODE_OPTIONS='--experimental-sqlite --no-warnings=ExperimentalWarning' tsx watch --env-file=.env src/main.ts",
