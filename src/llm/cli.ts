@@ -3,6 +3,26 @@ import type { Model, LlmRequestOptions } from './index.js';
 
 const ANSI_RE = /\x1B\[[0-9;]*[A-Za-z]/g;
 
+function shellSplit(cmd: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | null = null;
+  for (const ch of cmd) {
+    if (quote) {
+      if (ch === quote) { quote = null; }
+      else { current += ch; }
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === ' ') {
+      if (current) { tokens.push(current); current = ''; }
+    } else {
+      current += ch;
+    }
+  }
+  if (current) tokens.push(current);
+  return tokens;
+}
+
 export class CliModel implements Model {
   readonly provider = 'cli' as const;
   readonly id: string;
@@ -15,7 +35,7 @@ export class CliModel implements Model {
 
   generate(systemInstruction: string, prompt: string, _options?: LlmRequestOptions): Promise<string> {
     return new Promise((resolve, reject) => {
-      const [cmd, ...args] = this.id.split(' ');
+      const [cmd, ...args] = shellSplit(this.id);
       const child = spawn(cmd!, args, { stdio: ['pipe', 'pipe', 'pipe'] });
       const chunks: Buffer[] = [];
       const errChunks: Buffer[] = [];

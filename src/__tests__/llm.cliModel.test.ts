@@ -19,6 +19,16 @@ describe('CliModel — subprocess round-trip', () => {
   });
 });
 
+// ops-hardening slice 6: DEBT-4
+describe('CliModel — quoted argument parsing', () => {
+  it('passes quoted arguments with spaces as a single token (DEBT-4)', async () => {
+    // sh -c "echo hello" should produce "hello", not fail with broken quoting
+    const model = new CliModel('sh -c "echo hello"');
+    const result = await model.generate('system', 'prompt');
+    expect(result).toContain('hello');
+  });
+});
+
 describe('CliModel — ANSI stripping', () => {
   it('strips ANSI escape codes from output', async () => {
     const model = new CliModel('cat');
