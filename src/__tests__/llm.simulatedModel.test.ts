@@ -36,6 +36,25 @@ describe('SimulatedModel — fixture lookup', () => {
   });
 });
 
+// ops-hardening slice 2: BUG-3
+describe('SimulatedModel — supervisor fixture', () => {
+  it('returns supervisor fixture (not FALLBACK) when called with supervisor system prompt (BUG-3)', async () => {
+    const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const model = new SimulatedModel();
+    const result = await model.generate(
+      'You are a Supervisor agent. Evaluate risk.',
+      'Evaluate this task:\nBuild a registration endpoint',
+    );
+    const parsed = JSON.parse(result);
+    // The supervisor fixture should have action/reason/estimated_cost_usd
+    expect(parsed).toHaveProperty('action');
+    expect(parsed).toHaveProperty('reason');
+    // No fallback warning should be emitted
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
 describe('SimulatedModel — factory detection', () => {
   it('detectProvider returns simulated for simulated model id', async () => {
     const { detectProvider } = await import('../llm/index.js');

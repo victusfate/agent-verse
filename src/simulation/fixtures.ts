@@ -61,7 +61,7 @@ export const FIXTURES: Record<string, string> = {
   'product:policy': POLICY_OUTPUT,
   'engineering:policy': POLICY_OUTPUT,
   'customer-success:policy': POLICY_OUTPUT,
-  'supervisor:evaluate': SUPERVISOR_OUTPUT,
+  'supervisor:policy': SUPERVISOR_OUTPUT,
   'monitor:diagnose': MONITOR_OUTPUT,
   'idea:generate': IDEA_OUTPUT,
   'ceo:init': CEO_OUTPUT,

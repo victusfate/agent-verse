@@ -123,4 +123,22 @@ describe('supervisor.evaluate — budget hard-halt', () => {
     expect(decision.action).toBe('halt');
     expect(mockGenerate).not.toHaveBeenCalled();
   });
+
+  // ops-hardening slice 2: BUG-4
+  it('does NOT hard-halt when remaining budget equals exactly MIN_TASK_BUDGET_USD (BUG-4)', async () => {
+    const { createModel } = await import('../llm/index.js');
+    const mockCreate = vi.mocked(createModel);
+    const mockGenerate = vi.fn(async () => JSON.stringify({
+      action: 'pass', reason: 'ok', estimated_cost_usd: 0.01,
+    }));
+    mockCreate.mockResolvedValue({ id: 'stub', provider: 'openai', generate: mockGenerate });
+
+    // exactly MIN_TASK_BUDGET_USD ($0.05) remaining (0.05 - 0 = 0.05 exactly) — should NOT hard-halt
+    const exactCtx = { token_budget_usd: 0.05, tokens_consumed_usd: 0 };
+    const { evaluate } = await import('../agents/supervisor.js');
+    const decision = await evaluate(makeTask(), exactCtx);
+
+    expect(decision.action).toBe('pass');
+    expect(mockGenerate).toHaveBeenCalled();
+  });
 });

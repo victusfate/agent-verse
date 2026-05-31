@@ -34,7 +34,7 @@ export async function evaluate(
 ): Promise<SupervisorDecision> {
   const remaining = budgetCtx.token_budget_usd - budgetCtx.tokens_consumed_usd;
 
-  if (remaining <= MIN_TASK_BUDGET_USD) {
+  if (remaining < MIN_TASK_BUDGET_USD) {
     const decision: SupervisorDecision = {
       task_id: task.task_id,
       action: 'halt',
