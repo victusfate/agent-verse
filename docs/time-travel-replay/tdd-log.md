@@ -2,7 +2,7 @@
 
 | Slice | Behaviour | Status | Commit |
 |-------|-----------|--------|--------|
-| 1 | Tooling & Setup | PENDING | — |
+| 1 | Tooling & Setup | GREEN | 2c64db3 |
 | 2 | Playback Engine & History API | PENDING | — |
 | 3 | Deterministic Services & ESM Cache Bypass | PENDING | — |
 | 4 | Premium Visual Dashboard & Replay Controller | PENDING | — |
