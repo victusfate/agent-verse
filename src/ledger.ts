@@ -36,6 +36,17 @@ function db(): DatabaseSync {
   return _db!;
 }
 
+export interface LedgerRow {
+  id: number;
+  ts: string;
+  company_id: string;
+  event_type: string;
+  agent_type: string | null;
+  payload: unknown;
+}
+
+type RawRow = { id: number; ts: string; company_id: string; event_type: string; agent_type: string | null; payload: string };
+
 export function record(
   company_id: string,
   event_type: string,
@@ -51,6 +62,37 @@ export function record(
     agent_type ?? null,
     JSON.stringify(payload),
   );
+}
+
+export function queryEvents(company_id: string, since?: number, until?: number): LedgerRow[] {
+  let sql = 'SELECT id, ts, company_id, event_type, agent_type, payload FROM events WHERE company_id = ?';
+  const params: unknown[] = [company_id];
+  if (since !== undefined) { sql += ' AND id > ?'; params.push(since); }
+  if (until !== undefined) { sql += ' AND id <= ?'; params.push(until); }
+  sql += ' ORDER BY id ASC';
+  const rows = db().prepare(sql).all(...params) as RawRow[];
+  return rows.map(r => ({ ...r, payload: JSON.parse(r.payload) }));
+}
+
+export function tailEvents(
+  company_id: string,
+  since: number,
+  onRow: (row: LedgerRow) => void,
+  signal: AbortSignal,
+): void {
+  let lastId = since;
+  const poll = () => {
+    if (signal.aborted) return;
+    const rows = db().prepare(
+      'SELECT id, ts, company_id, event_type, agent_type, payload FROM events WHERE company_id = ? AND id > ? ORDER BY id ASC',
+    ).all(company_id, lastId) as RawRow[];
+    for (const r of rows) {
+      lastId = r.id;
+      onRow({ ...r, payload: JSON.parse(r.payload) });
+    }
+    if (!signal.aborted) setTimeout(poll, 500);
+  };
+  poll();
 }
 
 export function queryFailures(company_id: string): Array<Record<string, unknown>> {
