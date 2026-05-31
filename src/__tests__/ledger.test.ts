@@ -50,8 +50,105 @@ function buildLedger(dbPath: string) {
     return rows.map(r => ({ ts: r.ts, event_type: r.event_type, ...JSON.parse(r.payload) }));
   }
 
-  return { record, queryFailures };
+  function queryEvents(company_id: string, since?: number, until?: number): unknown[] {
+    let sql = 'SELECT id, ts, company_id, event_type, agent_type, payload FROM events WHERE company_id = ?';
+    const params: unknown[] = [company_id];
+    if (since !== undefined) { sql += ' AND id > ?'; params.push(since); }
+    if (until !== undefined) { sql += ' AND id <= ?'; params.push(until); }
+    sql += ' ORDER BY id ASC';
+    const rows = db.prepare(sql).all(...params) as Array<{
+      id: number; ts: string; company_id: string; event_type: string; agent_type: string | null; payload: string;
+    }>;
+    return rows.map(r => ({ ...r, payload: JSON.parse(r.payload) }));
+  }
+
+  function tailEvents(company_id: string, since: number, onRow: (row: unknown) => void, signal: AbortSignal): void {
+    let lastId = since;
+    const poll = () => {
+      if (signal.aborted) return;
+      const rows = db.prepare(
+        'SELECT id, ts, company_id, event_type, agent_type, payload FROM events WHERE company_id = ? AND id > ? ORDER BY id ASC'
+      ).all(company_id, lastId) as Array<{
+        id: number; ts: string; company_id: string; event_type: string; agent_type: string | null; payload: string;
+      }>;
+      for (const r of rows) {
+        lastId = r.id;
+        onRow({ ...r, payload: JSON.parse(r.payload) });
+      }
+      if (!signal.aborted) setTimeout(poll, 500);
+    };
+    poll();
+  }
+
+  return { record, queryFailures, queryEvents, tailEvents };
 }
+
+describe('ledger — queryEvents', () => {
+  let ledger: ReturnType<typeof buildLedger>;
+
+  beforeEach(() => { ledger = buildLedger(makeTempDb()); });
+
+  it('returns all events for a company when no range given', () => {
+    ledger.record('co-1', 'task.started', { x: 1 });
+    ledger.record('co-1', 'task.completed', { x: 2 });
+    expect(ledger.queryEvents('co-1')).toHaveLength(2);
+  });
+
+  it('filters events after since id (exclusive)', () => {
+    ledger.record('co-1', 'a', {});
+    ledger.record('co-1', 'b', {});
+    ledger.record('co-1', 'c', {});
+    const all = ledger.queryEvents('co-1') as Array<{ id: number; event_type: string }>;
+    const firstId = all[0]!.id;
+    const rest = ledger.queryEvents('co-1', firstId) as Array<{ event_type: string }>;
+    expect(rest).toHaveLength(2);
+    expect(rest[0]!.event_type).toBe('b');
+  });
+
+  it('filters events up to until id (inclusive)', () => {
+    ledger.record('co-1', 'a', {});
+    ledger.record('co-1', 'b', {});
+    ledger.record('co-1', 'c', {});
+    const all = ledger.queryEvents('co-1') as Array<{ id: number }>;
+    const secondId = all[1]!.id;
+    const slice = ledger.queryEvents('co-1', undefined, secondId) as Array<{ event_type: string }>;
+    expect(slice).toHaveLength(2);
+  });
+
+  it('parses payload as object', () => {
+    ledger.record('co-1', 'test', { key: 'value' });
+    const rows = ledger.queryEvents('co-1') as Array<{ payload: { key: string } }>;
+    expect(rows[0]!.payload.key).toBe('value');
+  });
+});
+
+describe('ledger — tailEvents', () => {
+  let ledger: ReturnType<typeof buildLedger>;
+
+  beforeEach(() => { ledger = buildLedger(makeTempDb()); });
+
+  it('delivers pre-existing rows after since=0', async () => {
+    ledger.record('co-1', 'a', {});
+    ledger.record('co-1', 'b', {});
+    const received: unknown[] = [];
+    const ctrl = new AbortController();
+    ledger.tailEvents('co-1', 0, (r) => received.push(r), ctrl.signal);
+    await new Promise(r => setTimeout(r, 50));
+    ctrl.abort();
+    expect(received).toHaveLength(2);
+  });
+
+  it('delivers new rows inserted after tail starts', async () => {
+    const received: unknown[] = [];
+    const ctrl = new AbortController();
+    ledger.tailEvents('co-1', 0, (r) => received.push(r), ctrl.signal);
+    await new Promise(r => setTimeout(r, 50));
+    ledger.record('co-1', 'late', {});
+    await new Promise(r => setTimeout(r, 600));
+    ctrl.abort();
+    expect(received).toHaveLength(1);
+  });
+});
 
 describe('ledger', () => {
   let ledger: ReturnType<typeof buildLedger>;

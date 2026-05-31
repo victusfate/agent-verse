@@ -1,5 +1,35 @@
 import { z } from 'zod';
 
+// ── Supervisor decision (Supervisor-Agent output) ─────────────────────────────
+
+export const SupervisorDecisionSchema = z.object({
+  task_id: z.string(),
+  action: z.enum(['mitigate', 'pass', 'halt']),
+  reason: z.string(),
+  estimated_cost_usd: z.number(),
+  mitigated_task: z.object({
+    task_id: z.string(),
+    company_id: z.string(),
+    role: z.enum(['product', 'engineering', 'customer-success']),
+    description: z.string(),
+    risk_tier: z.enum(['low', 'medium', 'high', 'critical']),
+    status: z.enum(['pending', 'in_progress', 'completed', 'failed', 'blocked', 'halted']),
+    result: z.string().nullable(),
+    error: z.string().nullable(),
+  }).optional(),
+});
+export type SupervisorDecision = z.infer<typeof SupervisorDecisionSchema>;
+
+// ── Hard halt event ───────────────────────────────────────────────────────────
+
+export const HardHaltSchema = z.object({
+  company_id: z.string(),
+  task_id: z.string(),
+  reason: z.enum(['budget_exceeded', 'destructive_action']),
+  detail: z.string(),
+});
+export type HardHalt = z.infer<typeof HardHaltSchema>;
+
 // ── Venture payload (Idea-Agent → CEO-Agent) ──────────────────────────────────
 
 export const VenturePayloadSchema = z.object({
@@ -19,7 +49,7 @@ export const OperatorTaskSchema = z.object({
   role: z.enum(['product', 'engineering', 'customer-success']),
   description: z.string(),
   risk_tier: z.enum(['low', 'medium', 'high', 'critical']).default('low'),
-  status: z.enum(['pending', 'in_progress', 'completed', 'failed', 'blocked']).default('pending'),
+  status: z.enum(['pending', 'in_progress', 'completed', 'failed', 'blocked', 'halted']).default('pending'),
   result: z.string().nullable().default(null),
   error: z.string().nullable().default(null),
 });
