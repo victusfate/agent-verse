@@ -298,25 +298,6 @@ function phaseAntigravityParity(rows) {
     if (!existsSync(skillFile)) {
       fail('Antigravity', `'${r.skill}' has no Antigravity skill at ${rel(skillFile)}`);
     } else if (!listedInManifest(`.agents/skills/${r.skill}/SKILL.md`)) {
-      fail('Antigravity', `.agents/skills/${r.skill}/SKILL.md not in scaffold manifest — won't sync downstream`);
-    }
-    const workflowFile = join(ANTIGRAVITY_WORKFLOWS, `${r.skill}.md`);
-    if (!existsSync(workflowFile)) {
-      fail('Antigravity', `'${r.skill}' has no Antigravity workflow at ${rel(workflowFile)}`);
-    } else if (!listedInManifest(`.agent/workflows/${r.skill}.md`)) {
-      fail('Antigravity', `.agent/workflows/${r.skill}.md not in scaffold manifest — won't sync downstream`);
-    }
-  }
-}
-
-// Phase 7b — Antigravity parity: every skill must have both an Antigravity skill
-// wrapper and a workflow file so it's available in Google Antigravity.
-function phaseAntigravityParity(rows) {
-  for (const r of rows) {
-    const skillFile = join(ANTIGRAVITY_SKILLS, r.skill, 'SKILL.md');
-    if (!existsSync(skillFile)) {
-      fail('Antigravity', `'${r.skill}' has no Antigravity skill at ${rel(skillFile)}`);
-    } else if (!listedInManifest(`.agents/skills/${r.skill}/SKILL.md`)) {
       warn('Antigravity', `.agents/skills/${r.skill}/SKILL.md not in scaffold manifest — won't sync downstream`);
     }
     const workflowFile = join(ANTIGRAVITY_WORKFLOWS, `${r.skill}.md`);
