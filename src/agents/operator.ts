@@ -19,6 +19,7 @@ import {
 import { withJsonSchema, parseModelJson, createModel } from '../llm/index.js';
 import * as brain from '../companyBrain.js';
 import { record } from '../ledger.js';
+import * as supervisor from './supervisor.js';
 
 // ── Schema hints embedded in prompts ─────────────────────────────────────────
 
@@ -145,8 +146,23 @@ export async function run(task: OperatorTask): Promise<OperatorTask> {
     console.log(`[Operator:${task.role}] L2-Policy ✓  risk=${policy.risk_tier} allowed=${policy.allowed}`);
 
     if (policy.escalate_to_human) {
-      console.log(`[Operator:${task.role}] ⚠ Human escalation required (risk=${policy.risk_tier})`);
-      record(task.company_id, 'human.escalation_required', { task_id: task.task_id, reason: policy.reason }, `operator.${task.role}`);
+      console.log(`[Operator:${task.role}] ⚡ Escalating to Supervisor (risk=${policy.risk_tier})`);
+      const ctx = brain.readContextFramework(task.company_id);
+      const budgetCtx = {
+        token_budget_usd: Number(ctx['token_budget_usd'] ?? 50),
+        tokens_consumed_usd: Number(ctx['tokens_consumed_usd'] ?? 0),
+      };
+      const decision = await supervisor.evaluate(task, budgetCtx);
+      telem('supervisor', { action: decision.action, reason: decision.reason }, decision.action !== 'halt');
+      console.log(`[Operator:${task.role}] Supervisor → ${decision.action}`);
+
+      if (decision.action === 'halt') {
+        return { ...task, status: 'halted', error: `Supervisor halt: ${decision.reason}` };
+      }
+      if (decision.action === 'mitigate' && decision.mitigated_task) {
+        task = { ...task, ...decision.mitigated_task };
+        console.log(`[Operator:${task.role}] Task mitigated → risk=${task.risk_tier}`);
+      }
     }
 
     if (!policy.allowed) {

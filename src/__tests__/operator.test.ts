@@ -96,6 +96,52 @@ describe('operator.run — happy path (slice 6)', () => {
   });
 });
 
+// ── Slice 4: supervisor integration ──────────────────────────────────────────
+
+vi.mock('../agents/supervisor.js', () => ({
+  evaluate: vi.fn(),
+}));
+
+describe('operator.run — supervisor integration', () => {
+  const HIGH_POLICY = { allowed: true, risk_tier: 'high', reason: 'External write', escalate_to_human: true };
+
+  it('returns status halted when supervisor halts the task', async () => {
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(modelStub([HIGH_POLICY]));
+
+    const { evaluate } = await import('../agents/supervisor.js');
+    vi.mocked(evaluate).mockResolvedValue({
+      task_id: 'task-001',
+      action: 'halt',
+      reason: 'Budget exhausted',
+      estimated_cost_usd: 0,
+    });
+
+    const { run } = await import('../agents/operator.js');
+    const result = await run(makeTask({ risk_tier: 'high' }));
+    expect(result.status).toBe('halted');
+  });
+
+  it('continues with mitigated task when supervisor mitigates', async () => {
+    const mitigatedTask = makeTask({ description: 'Read-only version', risk_tier: 'low' });
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(modelStub([HIGH_POLICY, VALID_TOOL]));
+
+    const { evaluate } = await import('../agents/supervisor.js');
+    vi.mocked(evaluate).mockResolvedValue({
+      task_id: 'task-001',
+      action: 'mitigate',
+      reason: 'Reduced scope',
+      estimated_cost_usd: 0.02,
+      mitigated_task: mitigatedTask,
+    });
+
+    const { run } = await import('../agents/operator.js');
+    const result = await run(makeTask({ risk_tier: 'high' }));
+    expect(result.status).toBe('completed');
+  });
+});
+
 // ── Slice 7: failure paths ────────────────────────────────────────────────────
 
 describe('operator.run — failure paths (slice 7)', () => {
