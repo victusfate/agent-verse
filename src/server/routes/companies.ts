@@ -2,11 +2,13 @@ import type http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const COMPANIES_DIR = path.join(process.cwd(), 'companies');
+function companiesDir(): string {
+  return path.join(process.cwd(), 'companies');
+}
 
 export function handleCompanies(_req: http.IncomingMessage, res: http.ServerResponse): void {
   try {
-    const entries = fs.readdirSync(COMPANIES_DIR, { withFileTypes: true })
+    const entries = fs.readdirSync(companiesDir(), { withFileTypes: true })
       .filter(e => e.isDirectory())
       .map(e => e.name);
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(entries));
@@ -17,7 +19,9 @@ export function handleCompanies(_req: http.IncomingMessage, res: http.ServerResp
 
 export function handleCompany(_req: http.IncomingMessage, res: http.ServerResponse, pathname: string): void {
   const id = pathname.replace('/companies/', '').split('/')[0]!;
-  const companyDir = path.join(COMPANIES_DIR, id);
+  const companyDir = path.join(companiesDir(), id);
+
+  if (!fs.existsSync(companyDir)) { res.writeHead(404).end(JSON.stringify({ error: 'Company not found' })); return; }
 
   try {
     const contextPath = path.join(companyDir, 'context_framework.json');
@@ -34,6 +38,6 @@ export function handleCompany(_req: http.IncomingMessage, res: http.ServerRespon
       JSON.stringify({ id, context, skills, task_count: tasks.length, tasks }),
     );
   } catch {
-    res.writeHead(404).end(JSON.stringify({ error: 'Company not found' }));
+    res.writeHead(500).end(JSON.stringify({ error: 'Internal server error' }));
   }
 }
