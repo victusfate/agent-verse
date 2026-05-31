@@ -48,7 +48,8 @@ const VALID_TOOL   = {
   confidence: 0.9,
   next_actions: [],
 };
-const BLOCK_POLICY = { allowed: false, risk_tier: 'high', reason: 'External mutation', escalate_to_human: true };
+// Policy that blocks without escalation — supervisor not involved
+const BLOCK_POLICY = { allowed: false, risk_tier: 'high', reason: 'External mutation', escalate_to_human: false };
 const LOW_CONF_TOOL = { deliverable: 'ok', artifacts: [], confidence: 0.1, next_actions: [] };
 
 // ── Setup: temp dir for companyBrain ─────────────────────────────────────────
@@ -103,7 +104,42 @@ vi.mock('../agents/supervisor.js', () => ({
 }));
 
 describe('operator.run — supervisor integration', () => {
-  const HIGH_POLICY = { allowed: true, risk_tier: 'high', reason: 'External write', escalate_to_human: true };
+  const HIGH_POLICY      = { allowed: true,  risk_tier: 'high', reason: 'External write', escalate_to_human: true };
+  const BLOCKED_POLICY   = { allowed: false, risk_tier: 'high', reason: 'External mutation', escalate_to_human: true };
+
+  // ── ops-hardening slice 1: BUG-1 ─────────────────────────────────────────
+  it('completes when policy=blocked but supervisor mitigates (BUG-1)', async () => {
+    const mitigatedTask = makeTask({ description: 'Read-only version', risk_tier: 'low' });
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(modelStub([BLOCKED_POLICY, VALID_TOOL]));
+
+    const { evaluate } = await import('../agents/supervisor.js');
+    vi.mocked(evaluate).mockResolvedValue({
+      task_id: 'task-001',
+      action: 'mitigate',
+      reason: 'Reduced to read-only',
+      estimated_cost_usd: 0.01,
+      mitigated_task: mitigatedTask,
+    });
+
+    const { run } = await import('../agents/operator.js');
+    const result = await run(makeTask({ risk_tier: 'high' }));
+    expect(result.status).toBe('completed');
+  });
+
+  // ── ops-hardening slice 1: BUG-2 ─────────────────────────────────────────
+  it('returns status failed when supervisor.evaluate throws (BUG-2)', async () => {
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(modelStub([HIGH_POLICY]));
+
+    const { evaluate } = await import('../agents/supervisor.js');
+    vi.mocked(evaluate).mockRejectedValue(new Error('supervisor timeout'));
+
+    const { run } = await import('../agents/operator.js');
+    const result = await run(makeTask({ risk_tier: 'high' }));
+    expect(result.status).toBe('failed');
+    expect(result.error).toContain('supervisor timeout');
+  });
 
   it('returns status halted when supervisor halts the task', async () => {
     const { createModel } = await import('../llm/index.js');

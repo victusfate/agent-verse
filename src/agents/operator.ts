@@ -151,7 +151,15 @@ export async function run(task: OperatorTask): Promise<OperatorTask> {
         token_budget_usd: Number(ctx['token_budget_usd'] ?? 50),
         tokens_consumed_usd: Number(ctx['tokens_consumed_usd'] ?? 0),
       };
-      const decision = await supervisor.evaluate(task, budgetCtx);
+      let decision: import('../schemas.js').SupervisorDecision;
+      try {
+        decision = await supervisor.evaluate(task, budgetCtx);
+      } catch (supErr) {
+        const msg = String(supErr);
+        telem('supervisor', {}, false, msg);
+        console.log(`[Operator:${task.role}] Supervisor ✗  ${msg}`);
+        return { ...task, status: 'failed', error: `Supervisor unavailable: ${msg}` };
+      }
       telem('supervisor', { action: decision.action, reason: decision.reason }, decision.action !== 'halt');
       console.log(`[Operator:${task.role}] Supervisor → ${decision.action}`);
 
@@ -162,16 +170,18 @@ export async function run(task: OperatorTask): Promise<OperatorTask> {
         task = { ...task, ...decision.mitigated_task };
         console.log(`[Operator:${task.role}] Task mitigated → risk=${task.risk_tier}`);
       }
-    }
-
-    if (!policy.allowed) {
+      // Supervisor pass or mitigate overrides a policy block — continue to tool execution
+      if (!policy.allowed) {
+        console.log(`[Operator:${task.role}] Policy block overridden by supervisor ${decision.action}`);
+      }
+    } else if (!policy.allowed) {
       return { ...task, status: 'blocked', error: `Policy blocked: ${policy.reason}` };
     }
   } catch (err) {
     const msg = String(err);
     telem('policy', {}, false, msg);
     console.log(`[Operator:${task.role}] L2-Policy ✗  ${msg}`);
-    // Non-fatal — continue with execution
+    // policyCheck itself failed — non-fatal, continue
   }
 
   // ── L3: Tool ─────────────────────────────────────────────────────────────
