@@ -52,6 +52,16 @@ afterEach(async () => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
+// ops-hardening slice 4: SAF-1
+describe('Server DB setup', () => {
+  it('opens the database in WAL journal mode (SAF-1)', () => {
+    const db = new DatabaseSync(dbPath);
+    const row = db.prepare('PRAGMA journal_mode').get() as { journal_mode: string };
+    db.close();
+    expect(row.journal_mode).toBe('wal');
+  });
+});
+
 describe('GET /events', () => {
   it('returns 200 with JSON array of events for a company', async () => {
     const res = await get(port, '/events?company_id=test-co');

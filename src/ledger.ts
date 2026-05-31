@@ -16,19 +16,26 @@ export const DB_PATH = path.join(__dirname, '..', 'companies', 'ledger.db');
 
 let _db: DatabaseSync | null = null;
 
+const EVENTS_DDL = `
+  CREATE TABLE IF NOT EXISTS events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts         TEXT    NOT NULL,
+    company_id TEXT    NOT NULL,
+    event_type TEXT    NOT NULL,
+    agent_type TEXT,
+    payload    TEXT    NOT NULL
+  )
+`;
+
+export function initDb(db: DatabaseSync): void {
+  db.exec('PRAGMA journal_mode=WAL');
+  db.exec(EVENTS_DDL);
+}
+
 export function initLedger(): void {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   _db = new DatabaseSync(DB_PATH);
-  _db.exec(`
-    CREATE TABLE IF NOT EXISTS events (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      ts         TEXT    NOT NULL,
-      company_id TEXT    NOT NULL,
-      event_type TEXT    NOT NULL,
-      agent_type TEXT,
-      payload    TEXT    NOT NULL
-    )
-  `);
+  initDb(_db);
 }
 
 function db(): DatabaseSync {
@@ -64,17 +71,18 @@ export function record(
   );
 }
 
-export function queryEvents(company_id: string, since?: number, until?: number): LedgerRow[] {
+export function queryEventsFromDb(handle: DatabaseSync, company_id: string, since?: number, until?: number): LedgerRow[] {
   let sql = 'SELECT id, ts, company_id, event_type, agent_type, payload FROM events WHERE company_id = ?';
   const params: unknown[] = [company_id];
   if (since !== undefined) { sql += ' AND id > ?'; params.push(since); }
   if (until !== undefined) { sql += ' AND id <= ?'; params.push(until); }
   sql += ' ORDER BY id ASC';
-  const rows = db().prepare(sql).all(...params) as RawRow[];
+  const rows = handle.prepare(sql).all(...params) as RawRow[];
   return rows.map(r => ({ ...r, payload: JSON.parse(r.payload) }));
 }
 
-export function tailEvents(
+export function tailEventsFromDb(
+  handle: DatabaseSync,
   company_id: string,
   since: number,
   onRow: (row: LedgerRow) => void,
@@ -83,7 +91,7 @@ export function tailEvents(
   let lastId = since;
   const poll = () => {
     if (signal.aborted) return;
-    const rows = db().prepare(
+    const rows = handle.prepare(
       'SELECT id, ts, company_id, event_type, agent_type, payload FROM events WHERE company_id = ? AND id > ? ORDER BY id ASC',
     ).all(company_id, lastId) as RawRow[];
     for (const r of rows) {
@@ -93,6 +101,19 @@ export function tailEvents(
     if (!signal.aborted) setTimeout(poll, 500);
   };
   poll();
+}
+
+export function queryEvents(company_id: string, since?: number, until?: number): LedgerRow[] {
+  return queryEventsFromDb(db(), company_id, since, until);
+}
+
+export function tailEvents(
+  company_id: string,
+  since: number,
+  onRow: (row: LedgerRow) => void,
+  signal: AbortSignal,
+): void {
+  tailEventsFromDb(db(), company_id, since, onRow, signal);
 }
 
 export function queryFailures(company_id: string): Array<Record<string, unknown>> {

@@ -1,15 +1,12 @@
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
+import { initDb } from '../ledger.js';
 import { handleEventsRange, handleEventsStream } from './routes/events.js';
 import { handleCompanies, handleCompany } from './routes/companies.js';
 
 export function createServer(dbPath: string): http.Server {
   const db = new DatabaseSync(dbPath);
-  db.exec(`CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL,
-    company_id TEXT NOT NULL, event_type TEXT NOT NULL,
-    agent_type TEXT, payload TEXT NOT NULL
-  )`);
+  initDb(db);
 
   return http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
