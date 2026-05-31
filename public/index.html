@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autonomous AI Corporate Ecosystem - Operator Console</title>
+  <!-- Google Fonts Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Background Animated Orbs -->
+  <div class="background-orb orb-purple"></div>
+  <div class="background-orb orb-blue"></div>
+  <div class="background-orb orb-cyan"></div>
+
+  <div class="app-container">
+    
+    <!-- MAIN HEADER -->
+    <header class="app-header">
+      <div class="header-logo">
+        <div class="logo-pulse"></div>
+        <h1>AGENT<span>VERSE</span></h1>
+        <span class="badge">V1.0.0-PROTOTYPE</span>
+      </div>
+      <div class="header-metrics">
+        <div class="metric-card">
+          <span class="label">ACTIVE COMPANY</span>
+          <span class="value" id="metrics-company">Idle</span>
+        </div>
+        <div class="metric-card">
+          <span class="label">CURRENT ITERATION</span>
+          <span class="value" id="metrics-iteration">0</span>
+        </div>
+        <div class="metric-card">
+          <span class="label">ACCURED COST</span>
+          <span class="value cost-value" id="metrics-cost">$0.00 USD</span>
+        </div>
+        <div class="metric-card budget-card">
+          <span class="label">BUDGET CEILING</span>
+          <span class="value" id="metrics-budget">$50.00 USD</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN TWO-COLUMN LAYOUT -->
+    <main class="dashboard-grid">
+      
+      <!-- LEFT COLUMN: GRAPH & LOGS -->
+      <section class="grid-col left-col">
+        
+        <!-- CARD 1: STATE GRAPH VISUALIZER -->
+        <div class="dashboard-card glass-panel state-graph-card">
+          <div class="card-header">
+            <h3>Ecosystem State Graph Topology</h3>
+            <span class="live-status" id="graph-state-label">ENGINE IDLE</span>
+          </div>
+          <div class="graph-viewport">
+            
+            <div class="graph-nodes">
+              <!-- Idea Agent -->
+              <div class="graph-node" id="node-Idea-Agent">
+                <div class="node-icon">💡</div>
+                <div class="node-label">Idea-Agent</div>
+                <div class="node-subtitle">Market Scraper</div>
+              </div>
+
+              <!-- CEO Agent -->
+              <div class="graph-node" id="node-CEO-Agent">
+                <div class="node-icon">💼</div>
+                <div class="node-label">CEO-Agent</div>
+                <div class="node-subtitle">Orchestrator</div>
+              </div>
+
+              <!-- Operators Group -->
+              <div class="graph-node node-group" id="node-Operator-Agents">
+                <div class="node-icon">⚙️</div>
+                <div class="node-label">Operator-Agents</div>
+                <div class="node-subtitle">5-Layer Workers</div>
+                <div class="sub-nodes">
+                  <span>Product</span>
+                  <span>Engineering</span>
+                  <span>CS</span>
+                </div>
+              </div>
+
+              <!-- Monitor Agent -->
+              <div class="graph-node" id="node-Monitor-Agent">
+                <div class="node-icon">🔍</div>
+                <div class="node-label">Monitor-Agent</div>
+                <div class="node-subtitle">Self-Healer</div>
+              </div>
+
+              <!-- Human at the Edge -->
+              <div class="graph-node human-node" id="node-Human-Edge">
+                <div class="node-icon">👤</div>
+                <div class="node-label">Human Supervisor</div>
+                <div class="node-subtitle">Edge Approval</div>
+              </div>
+            </div>
+
+            <!-- SVG connection lines managed by CSS animations -->
+            <div class="graph-connections">
+              <svg width="100%" height="100%" viewBox="0 0 600 240" style="position:absolute; top:0; left:0; pointer-events:none;">
+                <defs>
+                  <linearGradient id="cyan-glow" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#a855f7" />
+                    <stop offset="100%" stop-color="#06b6d4" />
+                  </linearGradient>
+                </defs>
+                <!-- Idea to CEO -->
+                <path d="M 120 70 L 210 70" stroke="#374151" stroke-width="2" id="line-idea-ceo" />
+                <!-- CEO to Operators -->
+                <path d="M 285 70 L 375 70" stroke="#374151" stroke-width="2" id="line-ceo-operators" />
+                <!-- Operators to Monitor -->
+                <path d="M 430 110 L 430 170 L 285 170" stroke="#374151" stroke-width="2" id="line-operators-monitor" />
+                <!-- Monitor to Operators -->
+                <path d="M 285 160 L 390 160 L 390 115" stroke="#374151" stroke-width="2" id="line-monitor-operators" />
+                <!-- Operators to Human -->
+                <path d="M 465 70 L 515 70" stroke="#374151" stroke-width="2" id="line-operators-human" />
+              </svg>
+            </div>
+            
+          </div>
+        </div>
+
+        <!-- NEW CARD: DETERMINISTIC TIME-TRAVEL PLAYBACK CONSOLE -->
+        <div class="dashboard-card glass-panel time-travel-card" style="margin-bottom: 24px;">
+          <div class="card-header">
+            <h3>Deterministic Time-Travel Playback Console</h3>
+            <span class="live-status" id="playback-status-label" style="color: var(--secondary-glow); border-color: rgba(6, 182, 212, 0.4);">LIVE RUNNING</span>
+          </div>
+          <div class="control-sections" style="padding: 16px;">
+            <!-- Timeline Scrubbing Slider -->
+            <div class="control-group" style="margin-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 6px;">
+                <span>Simulation Timeline</span>
+                <span id="playback-step-display" style="color: var(--secondary-glow); font-family: var(--font-mono);">Step 0 / 0</span>
+              </div>
+              <input type="range" id="playback-timeline" min="0" max="0" value="0" style="width: 100%; cursor: pointer;" disabled>
+            </div>
+            
+            <!-- Playback Control Buttons -->
+            <div class="playback-buttons-bar" style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
+              <button class="btn btn-sm btn-secondary" id="btn-playback-first" title="Jump to First Step" disabled>⏮️</button>
+              <button class="btn btn-sm btn-secondary" id="btn-playback-prev" title="Step Backward / Reverse" disabled>◀️</button>
+              <button class="btn btn-sm btn-warning" id="btn-playback-pause" title="Pause / Stop" disabled>⏸️</button>
+              <button class="btn btn-sm btn-success" id="btn-playback-play" title="Play Forward" disabled>▶️</button>
+              <button class="btn btn-sm btn-primary" id="btn-playback-ff" title="Fast Forward (2x)" disabled>▶️▶️</button>
+              <button class="btn btn-sm btn-secondary" id="btn-playback-latest" title="Jump to Latest / Resume Live" disabled>⏭️</button>
+              <button class="btn btn-sm btn-danger" id="btn-playback-clear-db" title="Clear Simulation History" style="margin-left: 16px;">🧹 Clear History</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 2: REAL-TIME LEDGER LOGS -->
+        <div class="dashboard-card glass-panel ledger-card">
+          <div class="card-header">
+            <h3>Total Legibility Event Ledger</h3>
+            <div class="header-actions">
+              <button class="btn btn-sm btn-secondary" id="btn-clear-logs">Clear Display</button>
+              <button class="btn btn-sm btn-primary" id="btn-refresh-logs">Reload DB</button>
+            </div>
+          </div>
+          <div class="terminal-viewport" id="terminal-logs">
+            <div class="terminal-line system-line">[SYSTEM] Waiting for dashboard event initialization...</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- RIGHT COLUMN: CONTROLS & BRAIN -->
+      <section class="grid-col right-col">
+        
+        <!-- CARD 3: ADMINISTRATIVE CONTROLS -->
+        <div class="dashboard-card glass-panel control-card">
+          <div class="card-header">
+            <h3>Human-at-the-Edge Controls</h3>
+          </div>
+          <div class="control-sections">
+            
+            <!-- Quick Sim Triggers -->
+            <div class="control-group">
+              <h4>Initiate Venture Generation</h4>
+              <div class="form-row">
+                <input type="text" id="input-custom-idea" placeholder="e.g. AI Financial Auditor" class="input-field">
+                <button class="btn btn-primary" id="btn-launch-venture">Scrape & Launch</button>
+              </div>
+            </div>
+
+            <!-- Friction Injectors -->
+            <div class="control-group">
+              <h4>Simulation Controls & Friction Testing</h4>
+              <div class="button-grid">
+                <button class="btn btn-danger glow-hover" id="btn-trigger-friction">
+                  💥 Inject Code Friction
+                  <span class="btn-sub">Force 100% Discount Crash</span>
+                </button>
+                <button class="btn btn-warning glow-hover" id="btn-trigger-payment">
+                  💸 Inject High-Risk Event
+                  <span class="btn-sub">Trigger Stripe Transfer > $500</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Human Threshold Configuration -->
+            <div class="control-group">
+              <h4>Financial Boundary Breakers</h4>
+              <div class="form-row">
+                <label for="input-budget">Set Budget Ceiling ($):</label>
+                <input type="number" id="input-budget" value="50" class="input-field compact">
+                <button class="btn btn-secondary" id="btn-update-budget">Apply Override</button>
+              </div>
+            </div>
+
+            <!-- HUMAN-IN-THE-LOOP APPROVAL QUEUE -->
+            <div class="control-group queue-group" id="approval-queue-section" style="display:none;">
+              <h4 class="alert-title">⚠️ TRANSACTION APPROVAL QUEUE</h4>
+              <div id="queue-container">
+                <!-- Queue Items Inject Dynamically -->
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- NEW CARD: ACTIVE REASONING ENGINE & LOCAL LLMs -->
+        <div class="dashboard-card glass-panel llm-config-card">
+          <div class="card-header">
+            <h3>Active Reasoning Engine & Local LLMs</h3>
+            <span class="live-status" id="llm-active-pill" style="color: var(--secondary-glow); border-color: rgba(6, 182, 212, 0.4);">Detecting...</span>
+          </div>
+          <div class="control-sections" style="padding: 16px;">
+            <div class="control-group">
+              <h4>Model Provider Selection</h4>
+              <div class="form-row" style="margin-bottom: 12px; justify-content: space-around; flex-wrap: wrap; gap: 16px;">
+                <label class="radio-label" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                  <input type="radio" name="llm-provider-toggle" id="radio-gemini" value="gemini">
+                  <span>Google Gemini (Cloud)</span>
+                  <span id="gemini-status-dot" class="status-dot"></span>
+                </label>
+                <label class="radio-label" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                  <input type="radio" name="llm-provider-toggle" id="radio-ollama" value="ollama">
+                  <span>Ollama (Local)</span>
+                  <span id="ollama-status-dot" class="status-dot"></span>
+                </label>
+              </div>
+
+              <div id="ollama-selection-row" class="form-row" style="display: none; margin-top: 12px;">
+                <label for="select-ollama-model" style="font-weight: 600; font-size: 12px;">Select Local Model:</label>
+                <select id="select-ollama-model" class="input-field" style="background: rgba(3, 7, 18, 0.85); color: #fff; font-family: var(--font-mono); font-size: 12px;">
+                  <!-- Dynamically populated -->
+                </select>
+              </div>
+              
+              <div class="form-row" style="margin-top: 16px;">
+                <button class="btn btn-primary glow-hover" id="btn-save-llm-config" style="width: 100%;">
+                  ⚡ Hot-Swap Reasoning Model
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 4: THE COMPANY BRAIN & SELF-HEALING VIEWER -->
+        <div class="dashboard-card glass-panel brain-card">
+          <div class="card-header tabs-header">
+            <button class="tab-btn active" data-tab="tab-brain-context">context_framework.json</button>
+            <button class="tab-btn" data-tab="tab-brain-skills">skills.md</button>
+            <button class="tab-btn" data-tab="tab-code-diff" id="tab-diff-header" style="display:none;">🩹 Self-Healed Diff</button>
+          </div>
+          
+          <div class="tabs-content">
+            <!-- Context Tab -->
+            <div class="tab-panel active" id="tab-brain-context">
+              <pre><code class="language-json" id="code-brain-context">// Company Brain not initialized. Launch a venture opportunity to view context framework.</code></pre>
+            </div>
+            
+            <!-- Skills Tab -->
+            <div class="tab-panel" id="tab-brain-skills">
+              <div class="markdown-preview" id="markdown-brain-skills">
+                <p>Company Brain not initialized. Launch a venture opportunity to view operating memory.</p>
+              </div>
+            </div>
+
+            <!-- Self-Healing Diff Tab -->
+            <div class="tab-panel" id="tab-code-diff">
+              <div class="diff-viewer">
+                <div class="diff-info">
+                  <span class="diff-file">services/calculator_service.js</span>
+                  <span class="diff-badge">AUTO PATCHED BY MONITOR AGENT</span>
+                </div>
+                <div class="diff-split">
+                  <div class="diff-pane diff-removed">
+                    <h5>Original Code (Buggy)</h5>
+                    <pre><code id="code-diff-removed"></code></pre>
+                  </div>
+                  <div class="diff-pane diff-added">
+                    <h5>Patched Code (Self-Healed)</h5>
+                    <pre><code id="code-diff-added"></code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
