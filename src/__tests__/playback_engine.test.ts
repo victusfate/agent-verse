@@ -46,6 +46,7 @@ describe('playback_engine', () => {
       currentIteration: 1,
       totalCost: 0.15,
       budgetCeiling: 50.00,
+      pendingEventFlow: 'financial',
       discountRate: 0.1,
       paymentAmount: 100,
       humanApprovalQueue: [],
