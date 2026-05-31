@@ -73,4 +73,10 @@ describe('GET /companies/:id', () => {
     const res = await get(port, '/companies/unknown-co');
     expect(res.status).toBe(404);
   });
+
+  // ops-hardening slice 3: SAF-3
+  it('returns 404 (not 500) for double-slash URL with empty id (SAF-3)', async () => {
+    const res = await get(port, '/companies//foo');
+    expect(res.status).toBe(404);
+  });
 });

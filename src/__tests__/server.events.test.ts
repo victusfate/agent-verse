@@ -73,6 +73,26 @@ describe('GET /events', () => {
   });
 });
 
+// ops-hardening slice 3: SAF-2
+describe('GET /events — input validation', () => {
+  it('returns 400 when since is non-numeric (SAF-2)', async () => {
+    const res = await get(port, '/events?company_id=test-co&since=notanumber');
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when until is non-numeric (SAF-2)', async () => {
+    const res = await get(port, '/events?company_id=test-co&until=bad');
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /events/stream — input validation', () => {
+  it('returns 400 when since is non-numeric on stream endpoint (SAF-2)', async () => {
+    const res = await get(port, '/events/stream?company_id=test-co&since=abc');
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('GET /events/stream', () => {
   it('responds with text/event-stream content-type', async () => {
     await new Promise<void>((resolve, reject) => {

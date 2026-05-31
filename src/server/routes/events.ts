@@ -16,9 +16,11 @@ export function handleEventsRange(db: DatabaseSync, req: http.IncomingMessage, r
   const url = new URL(req.url!, `http://${req.headers.host}`);
   const company_id = url.searchParams.get('company_id');
   if (!company_id) { res.writeHead(400).end(JSON.stringify({ error: 'company_id required' })); return; }
-  const since = url.searchParams.has('since') ? Number(url.searchParams.get('since')) : undefined;
-  const until = url.searchParams.has('until') ? Number(url.searchParams.get('until')) : undefined;
-  const rows = queryEvents(db, company_id, since, until);
+  const sinceRaw = url.searchParams.has('since') ? Number(url.searchParams.get('since')) : undefined;
+  const untilRaw = url.searchParams.has('until') ? Number(url.searchParams.get('until')) : undefined;
+  if (sinceRaw !== undefined && isNaN(sinceRaw)) { res.writeHead(400).end(JSON.stringify({ error: 'since must be a number' })); return; }
+  if (untilRaw !== undefined && isNaN(untilRaw)) { res.writeHead(400).end(JSON.stringify({ error: 'until must be a number' })); return; }
+  const rows = queryEvents(db, company_id, sinceRaw, untilRaw);
   res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(rows));
 }
 
@@ -26,7 +28,9 @@ export function handleEventsStream(db: DatabaseSync, req: http.IncomingMessage, 
   const url = new URL(req.url!, `http://${req.headers.host}`);
   const company_id = url.searchParams.get('company_id');
   if (!company_id) { res.writeHead(400).end(JSON.stringify({ error: 'company_id required' })); return; }
-  const since = url.searchParams.has('since') ? Number(url.searchParams.get('since')) : 0;
+  const sinceParam = url.searchParams.has('since') ? Number(url.searchParams.get('since')) : 0;
+  if (isNaN(sinceParam)) { res.writeHead(400).end(JSON.stringify({ error: 'since must be a number' })); return; }
+  const since = sinceParam;
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',

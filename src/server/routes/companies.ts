@@ -19,6 +19,7 @@ export function handleCompanies(_req: http.IncomingMessage, res: http.ServerResp
 
 export function handleCompany(_req: http.IncomingMessage, res: http.ServerResponse, pathname: string): void {
   const id = pathname.replace('/companies/', '').split('/')[0]!;
+  if (!id) { res.writeHead(404).end(JSON.stringify({ error: 'Company not found' })); return; }
   const companyDir = path.join(companiesDir(), id);
 
   if (!fs.existsSync(companyDir)) { res.writeHead(404).end(JSON.stringify({ error: 'Company not found' })); return; }
