@@ -26,10 +26,29 @@ const IRREVERSIBILITY_CRITERIA = [
   'publish to external services with real user impact',
 ].join('; ');
 
+const MIN_TASK_BUDGET_USD = 0.05;
+
 export async function evaluate(
   task: OperatorTask,
   budgetCtx: { token_budget_usd: number; tokens_consumed_usd: number },
 ): Promise<SupervisorDecision> {
+  const remaining = budgetCtx.token_budget_usd - budgetCtx.tokens_consumed_usd;
+
+  if (remaining <= MIN_TASK_BUDGET_USD) {
+    const decision: SupervisorDecision = {
+      task_id: task.task_id,
+      action: 'halt',
+      reason: `Budget exhausted: $${remaining.toFixed(4)} remaining of $${budgetCtx.token_budget_usd} ceiling`,
+      estimated_cost_usd: 0,
+    };
+    record(task.company_id, 'supervisor.hard_halt', {
+      task_id: task.task_id,
+      reason: 'budget_exceeded',
+      detail: decision.reason,
+    }, 'supervisor');
+    return decision;
+  }
+
   const model = await createModel();
   const system = withJsonSchema(
     `You are a Supervisor agent. A high/critical-risk task requires your judgment.

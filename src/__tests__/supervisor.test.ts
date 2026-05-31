@@ -93,3 +93,34 @@ describe('supervisor.evaluate — halt decision', () => {
     expect(decision.action).toBe('halt');
   });
 });
+
+describe('supervisor.evaluate — budget hard-halt', () => {
+  it('halts immediately without LLM call when budget is already exhausted', async () => {
+    const { createModel } = await import('../llm/index.js');
+    const mockCreate = vi.mocked(createModel);
+    const mockGenerate = vi.fn();
+    mockCreate.mockResolvedValue({ id: 'stub', provider: 'openai', generate: mockGenerate });
+
+    const exhaustedCtx = { token_budget_usd: 10, tokens_consumed_usd: 10 };
+    const { evaluate } = await import('../agents/supervisor.js');
+    const decision = await evaluate(makeTask(), exhaustedCtx);
+
+    expect(decision.action).toBe('halt');
+    expect(decision.reason).toMatch(/budget/i);
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+
+  it('halts immediately when remaining budget is below minimum task threshold', async () => {
+    const { createModel } = await import('../llm/index.js');
+    const mockCreate = vi.mocked(createModel);
+    const mockGenerate = vi.fn();
+    mockCreate.mockResolvedValue({ id: 'stub', provider: 'openai', generate: mockGenerate });
+
+    const tightCtx = { token_budget_usd: 10.03, tokens_consumed_usd: 10 };
+    const { evaluate } = await import('../agents/supervisor.js');
+    const decision = await evaluate(makeTask(), tightCtx);
+
+    expect(decision.action).toBe('halt');
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+});
