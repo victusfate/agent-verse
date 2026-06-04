@@ -6,50 +6,26 @@ An autonomous, self-improving corporate AI ecosystem. Drop in a seed idea (or le
 
 ## Architecture
 
-```
-                        ┌─────────────────────────────────────────────────┐
-                        │                  agent-verse                    │
-                        │                                                 │
-                        │   ┌─────────────┐                               │
-                        │   │  Idea-Agent │  Generates (or accepts) a     │
-                        │   │             │  VenturePayload: name, value   │
-                        │   │  💡 ideate  │  prop, audience, capabilities  │
-                        │   └──────┬──────┘                               │
-                        │          │ VenturePayload                        │
-                        │          ▼                                       │
-                        │   ┌─────────────┐                               │
-                        │   │  CEO-Agent  │  Provisions company dir,      │
-                        │   │             │  writes context_framework.json │
-                        │   │  🏢 staff   │  + skills.md, emits 3 tasks   │
-                        │   └──────┬──────┘                               │
-                        │          │ OperatorTask[]                        │
-                        │          ▼                                       │
-                        │   ┌──────────────────────────────────────────┐  │
-                        │   │          Operator Loop (max N cycles)    │  │
-                        │   │                                          │  │
-                        │   │  ┌────────────┐  ┌────────────┐  ┌────┐ │  │
-                        │   │  │  Product   │  │Engineering │  │ CS │ │  │
-                        │   │  │  Operator  │  │  Operator  │  │    │ │  │
-                        │   │  │ 📦 build   │  │ ⚙️  build  │  │ 🤝 │ │  │
-                        │   │  └────────────┘  └────────────┘  └────┘ │  │
-                        │   │       │ (parallel execution)       │      │  │
-                        │   │       └──────────────┬─────────────┘      │  │
-                        │   │                      │ telemetry           │  │
-                        │   │                      ▼                     │  │
-                        │   │              ┌───────────────┐             │  │
-                        │   │              │ Monitor-Agent │             │  │
-                        │   │              │               │             │  │
-                        │   │              │ 🔍 diagnose   │ ──▶ update  │  │
-                        │   │              │    & improve  │    skills   │  │
-                        │   │              └───────┬───────┘             │  │
-                        │   │                      │ iteration_complete? │  │
-                        │   └──────────────────────┼─────────────────────┘  │
-                        │                          │                        │
-                        │              ┌───────────▼────────────┐           │
-                        │              │    companies/ledger.db  │           │
-                        │              │    (append-only SQLite) │           │
-                        │              └────────────────────────┘           │
-                        └─────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    IA["💡 Idea-Agent<br/>Generates VenturePayload"]
+    CEO["🏢 CEO-Agent<br/>Provisions company · writes brain · emits 3 tasks"]
+
+    subgraph LOOP["Operator Loop — max N cycles"]
+        direction LR
+        PO["📦 Product"]
+        EO["⚙️ Engineering"]
+        CS["🤝 Customer Success"]
+    end
+
+    MON["🔍 Monitor-Agent<br/>Diagnoses friction · updates skills.md"]
+    DB[("🗄️ ledger.db<br/>append-only SQLite")]
+
+    IA -->|VenturePayload| CEO
+    CEO -->|"OperatorTask × 3"| LOOP
+    PO & EO & CS -->|telemetry| MON
+    MON -->|"not complete → next cycle"| LOOP
+    MON --> DB
 ```
 
 ---
@@ -69,29 +45,23 @@ Turns the payload into a live company:
 ### 3 — Operator-Agents (parallel)
 Three roles execute concurrently through a **5-layer recursive loop**:
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Operator Execution Stack                        │
-│                                                                      │
-│  Layer 1 — SENSOR        Ingest task from shared state              │
-│      │                                                               │
-│      ▼                                                               │
-│  Layer 2 — POLICY        Risk evaluation                            │
-│      │                   ├─ low / medium → proceed                  │
-│      │                   └─ high / critical → escalate to human ⚠️  │
-│      ▼                                                               │
-│  Layer 3 — TOOL          LLM-driven execution                       │
-│      │                   reads skills.md + context_framework.json   │
-│      │                   returns deliverable + artifacts + confidence│
-│      ▼                                                               │
-│  Layer 4 — QUALITY GATE  Structural validation                      │
-│      │                   ├─ deliverable length ≥ 20 chars           │
-│      │                   ├─ confidence ≥ 0.3                        │
-│      │                   └─ artifacts non-empty                     │
-│      ▼                                                               │
-│  Layer 5 — LEARNING      Package telemetry                          │
-│                          appends to task_log.jsonl + ledger         │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    S1["L1 · SENSOR<br/>Ingest task from shared state"]
+    S2["L2 · POLICY<br/>Risk evaluation"]
+    SUP["Supervisor Gate<br/>Autonomous risk judgment"]
+    S3["L3 · TOOL<br/>LLM-driven execution<br/>reads skills.md + context_framework.json"]
+    S4["L4 · QUALITY GATE<br/>length ≥ 20 · confidence ≥ 0.3 · artifacts non-empty"]
+    S5["L5 · LEARNING<br/>Package telemetry → task_log.jsonl + ledger"]
+    HALT(["⛔ task halted"])
+
+    S1 --> S2
+    S2 -->|low / medium| S3
+    S2 -->|"high / critical ⚠️"| SUP
+    SUP -->|mitigate| S3
+    SUP -->|halt| HALT
+    S3 --> S4
+    S4 --> S5
 ```
 
 ### 4 — Monitor-Agent
@@ -105,45 +75,19 @@ After each operator cycle, the Monitor:
 
 ## Data Flow
 
-```
-  ┌──────────────┐     VenturePayload      ┌──────────────┐
-  │  Idea-Agent  │ ─────────────────────▶  │  CEO-Agent   │
-  └──────────────┘                         └──────┬───────┘
-                                                  │ OperatorTask[]
-                                                  ▼
-                              ┌───────────────────────────────────┐
-                              │         AgentState (graph)         │
-                              │  venturePayload                    │
-                              │  companyId                         │
-                              │  operatorTasks[]                   │
-                              │  cycle                             │
-                              │  monitorReport                     │
-                              │  iterationComplete                 │
-                              └───────────────┬───────────────────┘
-                                              │
-                    ┌─────────────────────────┼──────────────────────┐
-                    ▼                         ▼                      ▼
-           ┌──────────────┐         ┌──────────────┐       ┌──────────────┐
-           │   Product    │         │ Engineering  │       │  Customer    │
-           │   Operator   │         │   Operator   │       │   Success    │
-           └──────┬───────┘         └──────┬───────┘       └──────┬───────┘
-                  │                        │                       │
-                  └────────────────────────┼───────────────────────┘
-                                           │ telemetry entries
-                                           ▼
-                                  ┌─────────────────┐
-                                  │  Monitor-Agent  │
-                                  └────────┬────────┘
-                                           │ MonitorReport
-                                           ▼
-                                  ┌─────────────────┐
-                                  │  iteration_     │
-                                  │  complete?      │
-                                  └────────┬────────┘
-                                     No   │   Yes
-                              ┌──────────┘   └──────────┐
-                              ▼                          ▼
-                         next cycle               final summary
+```mermaid
+flowchart TD
+    IA[Idea-Agent] -->|VenturePayload| CEO[CEO-Agent]
+    CEO -->|OperatorTask array| STATE["AgentState<br/>venturePayload · companyId<br/>operatorTasks · cycle<br/>monitorReport · iterationComplete"]
+
+    STATE --> PO[Product Operator]
+    STATE --> EO[Engineering Operator]
+    STATE --> CSO[Customer Success Operator]
+
+    PO & EO & CSO -->|telemetry entries| MON[Monitor-Agent]
+
+    MON -->|"iteration_complete = false → next cycle"| STATE
+    MON -->|"iteration_complete = true"| DONE([final summary])
 ```
 
 ---
