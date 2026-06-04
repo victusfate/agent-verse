@@ -234,7 +234,7 @@ Tests live in `src/__tests__/` and cover schemas, graph state machine, ledger op
 
 The `/feature-chain` skill drives the full design → PRD → TDD → review loop.
 <!-- BEGIN_SKILLS_INVOCATION -->
-Skills can also be invoked individually: `/feature-chain`, `/grill-with-docs`, `/to-prd`, `/tdd`, `/design-review`, `/code-quality-review`, `/skillify`, `/sync-scaffold`, `/create-pr`, `/code-review`, `/simplify`, `/prune`, `/pause`, `/resume`, `/skill-export`.
+Skills can also be invoked individually: `/feature-chain`, `/grill-with-docs`, `/to-prd`, `/tdd`, `/design-review`, `/code-quality-review`, `/skillify`, `/sync-scaffold`, `/create-pr`, `/code-review`, `/simplify`, `/prune`, `/pause`, `/resume`, `/hoist-skill`.
 <!-- END_SKILLS_INVOCATION -->
 
 ---
@@ -278,7 +278,7 @@ bin/
     prune/SKILL.md                # Run all quality review skills and funnel findings into design→PRD→TDD→PR
     pause/SKILL.md                # Checkpoint the session into git — write a handoff, commit work in flight, and push so any device can resume
     resume/SKILL.md               # Reload a checkpointed session from the pushed handoff and continue from its next steps, cold or cross-device
-    skill-export/SKILL.md         # Export scaffold capabilities into a consumer repo in the target harness format
+    hoist-skill/SKILL.md          # Hoist scaffold capabilities into a consumer repo in the target harness format
   session-start/
     hook.sh                      # SessionStart hook: fetches origin/main, warns if branch is behind
   read-once/
@@ -302,7 +302,7 @@ bin/
     prune.mdc                # mirrors prune for Cursor
     pause.mdc                # mirrors pause for Cursor
     resume.mdc               # mirrors resume for Cursor
-    skill-export.mdc         # mirrors skill-export for Cursor
+    hoist-skill.mdc          # mirrors hoist-skill for Cursor
 .agents/
   skills/
     feature-chain/SKILL.md        # Orchestrate design → PRD → TDD → review end to end
@@ -319,7 +319,7 @@ bin/
     prune/SKILL.md                # Run all quality review skills and funnel findings into design→PRD→TDD→PR
     pause/SKILL.md                # Checkpoint the session into git — write a handoff, commit work in flight, and push so any device can resume
     resume/SKILL.md               # Reload a checkpointed session from the pushed handoff and continue from its next steps, cold or cross-device
-    skill-export/SKILL.md         # Export scaffold capabilities into a consumer repo in the target harness format
+    hoist-skill/SKILL.md          # Hoist scaffold capabilities into a consumer repo in the target harness format
 .agent/
   rules/
     agents.md               # thin pointer to AGENTS.md (always-on)
@@ -338,7 +338,7 @@ bin/
     prune.md                # Run all quality review skills and funnel findings into design→PRD→TDD→PR
     pause.md                # Checkpoint the session into git — write a handoff, commit work in flight, and push so any device can resume
     resume.md               # Reload a checkpointed session from the pushed handoff and continue from its next steps, cold or cross-device
-    skill-export.md         # Export scaffold capabilities into a consumer repo in the target harness format
+    hoist-skill.md          # Hoist scaffold capabilities into a consumer repo in the target harness format
 scripts/
   check-resolvable.mjs           # RESOLVER linter (reachability/ambiguity/DRY/MECE/cursor/antigravity/sync)
   update-readme-skills.mjs       # regenerate README.md skill sections from RESOLVER.md
