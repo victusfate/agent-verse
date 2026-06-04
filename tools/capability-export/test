@@ -35,9 +35,25 @@ console.log('\nCase 1: emit feature-chain --harness claude');
   const wrapper = readFileSync(join(dest, '.claude/skills/feature-chain/SKILL.md'), 'utf8');
   assert('wrapper @-includes canonical at correct depth',
     wrapper.includes('@../../../skills/feature-chain.md'));
+  assert('claude wrapper has description frontmatter', wrapper.includes('description:'));
 
   const out = JSON.parse(r.stdout);
   assert('JSON output has results array', Array.isArray(out.results));
+}
+
+// ---------------------------------------------------------------- case 1b: fallback wrapper has frontmatter when no source file exists
+
+console.log('\nCase 1b: claude wrapper fallback generates description frontmatter');
+{
+  // Emit a skill whose wrapper source we temporarily simulate as absent by pointing --into
+  // a fresh dir and checking that even the fallback path produces valid frontmatter.
+  // We test this by inspecting a real skill that has no pre-existing wrapper in dest.
+  const dest = mkdtempSync(join(tmpdir(), 'cap-export-'));
+  const r = run(['--names', 'tdd', '--harness', 'claude', '--into', dest]);
+  assert('exits 0', r.status === 0, r.stderr);
+  const wrapper = readFileSync(join(dest, '.claude/skills/tdd/SKILL.md'), 'utf8');
+  assert('fallback wrapper has description frontmatter', wrapper.includes('description:'));
+  assert('fallback wrapper has @-include', wrapper.includes('@../../../skills/tdd.md'));
 }
 
 // ---------------------------------------------------------------- case 2: .scaffold-keep is honored

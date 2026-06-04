@@ -110,12 +110,13 @@ function safeWrite(dest, relPath, content, kept, results) {
 // ---------------------------------------------------------------- per-harness emitters
 
 function emitClaude(cap, dest, kept, results) {
-  // Canonical body
   const bodyAbs = join(SCAFFOLD_ROOT, cap.path);
   safeWrite(dest, cap.path, readFileSync(bodyAbs, 'utf8'), kept, results);
-  // Claude wrapper
   const wrapperRel = `.claude/skills/${cap.name}/SKILL.md`;
-  const wrapperContent = `@../../../${cap.path}\n`;
+  const wrapperSrc = join(SCAFFOLD_ROOT, '.claude', 'skills', cap.name, 'SKILL.md');
+  const wrapperContent = existsSync(wrapperSrc)
+    ? readFileSync(wrapperSrc, 'utf8')
+    : `---\ndescription: ${cap.purpose}\n---\n\n@../../../${cap.path}\n`;
   safeWrite(dest, wrapperRel, wrapperContent, kept, results);
 }
 
