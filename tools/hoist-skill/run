@@ -292,7 +292,9 @@ if (planMode) {
     }
   }
 
-  const out = { ref };
+  const uniquePairRefs = [...new Set(emitPairs.map(p => p.ref ?? 'main'))];
+  const effectiveRef = refExplicit ? ref : (uniquePairRefs.length === 1 ? uniquePairRefs[0] : ref);
+  const out = { ref: effectiveRef };
   if (uniqueHarnesses.length === 1) out.harness = uniqueHarnesses[0];
   else out.harnesses = uniqueHarnesses;
   out.sources = sources;

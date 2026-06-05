@@ -41,8 +41,6 @@ run:
   command: node ./run
 test:
   command: node ./test
-test-integration:
-  command: RUN_INTEGRATION=1 node ./test-integration
 emits:
   - claude
   - cursor
