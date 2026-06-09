@@ -5,31 +5,17 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer } from '../server/index.js';
+import { initDb } from '../ledger.js';
+import { get } from './helpers.js';
 
 function seedDb(dbPath: string, company_id: string) {
   const db = new DatabaseSync(dbPath);
-  db.exec(`CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL,
-    company_id TEXT NOT NULL, event_type TEXT NOT NULL,
-    agent_type TEXT, payload TEXT NOT NULL
-  )`);
+  initDb(db);
   db.prepare('INSERT INTO events (ts, company_id, event_type, agent_type, payload) VALUES (?,?,?,?,?)')
     .run(new Date().toISOString(), company_id, 'task.started', 'operator.engineering', JSON.stringify({ task_id: 'abc' }));
   db.prepare('INSERT INTO events (ts, company_id, event_type, agent_type, payload) VALUES (?,?,?,?,?)')
     .run(new Date().toISOString(), company_id, 'task.completed', 'operator.engineering', JSON.stringify({ task_id: 'abc' }));
   db.close();
-}
-
-function get(port: number, path: string): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }> {
-  return new Promise((resolve, reject) => {
-    const req = http.request({ port, path, method: 'GET' }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (c: Buffer) => chunks.push(c));
-      res.on('end', () => resolve({ status: res.statusCode!, headers: res.headers, body: Buffer.concat(chunks).toString() }));
-    });
-    req.on('error', reject);
-    req.end();
-  });
 }
 
 let server: http.Server;

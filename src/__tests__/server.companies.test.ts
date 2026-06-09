@@ -5,18 +5,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer } from '../server/index.js';
-
-function get(port: number, urlPath: string): Promise<{ status: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const req = http.request({ port, path: urlPath, method: 'GET' }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (c: Buffer) => chunks.push(c));
-      res.on('end', () => resolve({ status: res.statusCode!, body: Buffer.concat(chunks).toString() }));
-    });
-    req.on('error', reject);
-    req.end();
-  });
-}
+import { initDb } from '../ledger.js';
+import { get } from './helpers.js';
 
 let server: http.Server;
 let port: number;
@@ -26,7 +16,7 @@ beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'av-co-'));
   const dbPath = path.join(tmpDir, 'ledger.db');
   const db = new DatabaseSync(dbPath);
-  db.exec('CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, company_id TEXT NOT NULL, event_type TEXT NOT NULL, agent_type TEXT, payload TEXT NOT NULL)');
+  initDb(db);
   db.close();
 
   // Seed a company directory

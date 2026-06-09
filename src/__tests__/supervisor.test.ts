@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { OperatorTask } from '../schemas.js';
+import { makeTask as sharedMakeTask, stubModel } from './helpers.js';
 
 vi.mock('../llm/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../llm/index.js')>();
@@ -12,26 +13,10 @@ vi.mock('../ledger.js', async (importOriginal) => {
 });
 
 function makeTask(overrides: Partial<OperatorTask> = {}): OperatorTask {
-  return {
-    task_id: 'task-001',
-    company_id: 'test-co',
-    role: 'engineering',
-    description: 'Build an API endpoint',
-    risk_tier: 'high',
-    status: 'pending',
-    result: null,
-    error: null,
-    ...overrides,
-  };
+  return sharedMakeTask({ task_id: 'task-001', description: 'Build an API endpoint', risk_tier: 'high', ...overrides });
 }
 
-function makeModel(response: Record<string, unknown>) {
-  return {
-    id: 'stub',
-    provider: 'openai' as const,
-    generate: vi.fn(async () => ({ text: JSON.stringify(response) })),
-  };
-}
+const makeModel = (response: Record<string, unknown>) => stubModel([response]);
 
 const BUDGET_CTX = { token_budget_usd: 50, tokens_consumed_usd: 10 };
 

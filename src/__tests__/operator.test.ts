@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import type { Model } from '../llm/index.js';
-import type { OperatorTask } from '../schemas.js';
+import { makeTask, stubModel as modelStub } from './helpers.js';
 
 // Mock createModel at top level so vitest's hoist can handle it correctly
 vi.mock('../llm/index.js', async (importOriginal) => {
@@ -16,30 +16,6 @@ vi.mock('../ledger.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../ledger.js')>();
   return { ...actual, record: vi.fn(), initLedger: vi.fn() };
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function makeTask(overrides: Partial<OperatorTask> = {}): OperatorTask {
-  return {
-    task_id: crypto.randomUUID(),
-    company_id: 'test-co',
-    role: 'engineering',
-    description: 'Write an API endpoint for user registration',
-    risk_tier: 'low',
-    status: 'pending',
-    result: null,
-    error: null,
-    ...overrides,
-  };
-}
-
-function modelStub(canned: Record<string, unknown>[]): Model {
-  let call = 0;
-  return {
-    id: 'stub', provider: 'openai',
-    generate: vi.fn(async () => ({ text: JSON.stringify(canned[call++ % canned.length]) })),
-  };
-}
 
 const VALID_POLICY = { allowed: true, risk_tier: 'low', reason: 'safe', escalate_to_human: false };
 const VALID_TOOL   = {

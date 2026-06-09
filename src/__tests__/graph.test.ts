@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import type { VenturePayload, OperatorTask, MonitorReport } from '../schemas.js';
+import { makeTask as sharedMakeTask } from './helpers.js';
 
 vi.mock('../agents/idea.js', () => ({ run: vi.fn() }));
 vi.mock('../agents/ceo.js', () => ({ run: vi.fn() }));
@@ -21,17 +22,7 @@ const VENTURE: VenturePayload = {
 };
 
 function makeTask(overrides: Partial<OperatorTask> = {}): OperatorTask {
-  return {
-    task_id: crypto.randomUUID(),
-    company_id: 'co-123',
-    role: 'engineering',
-    description: 'Build something',
-    risk_tier: 'low',
-    status: 'completed',
-    result: 'done',
-    error: null,
-    ...overrides,
-  };
+  return sharedMakeTask({ company_id: 'co-123', description: 'Build something', status: 'completed', result: 'done', ...overrides });
 }
 
 const TASKS: OperatorTask[] = [
