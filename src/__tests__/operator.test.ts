@@ -215,3 +215,108 @@ describe('operator.run — failure paths (slice 7)', () => {
     expect(result.error?.toLowerCase()).toContain('quality gate');
   });
 });
+
+// ── Quality rework slice 4: safety controls ───────────────────────────────────
+
+describe('operator.run — budget accounting (F-03)', () => {
+  it('accumulates estimated LLM cost into tokens_consumed_usd', async () => {
+    const usageStub: Model = {
+      id: 'gpt-4o-mini', provider: 'openai',
+      generate: vi.fn(async () => ({
+        text: JSON.stringify(VALID_TOOL),
+        usage: { inputTokens: 100_000, outputTokens: 50_000 },
+      })),
+    };
+    // first call returns policy, second returns tool — both report usage
+    vi.mocked(usageStub.generate)
+      .mockResolvedValueOnce({ text: JSON.stringify(VALID_POLICY), usage: { inputTokens: 100_000, outputTokens: 50_000 } })
+      .mockResolvedValueOnce({ text: JSON.stringify(VALID_TOOL), usage: { inputTokens: 100_000, outputTokens: 50_000 } });
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(usageStub);
+
+    const { run } = await import('../agents/operator.js');
+    await run(makeTask());
+
+    const ctxPath = path.join(tmpRoot, 'companies', 'test-co', 'context_framework.json');
+    const ctx = JSON.parse(fs.readFileSync(ctxPath, 'utf-8')) as Record<string, unknown>;
+    expect(Number(ctx['tokens_consumed_usd'])).toBeGreaterThan(0);
+  });
+});
+
+describe('operator.run — fail-closed policy (F-06)', () => {
+  it('escalates to the supervisor when policyCheck itself fails', async () => {
+    const policyThrows: Model = {
+      id: 'stub', provider: 'openai',
+      generate: vi.fn()
+        .mockRejectedValueOnce(new Error('policy LLM down'))
+        .mockResolvedValueOnce({ text: JSON.stringify(VALID_TOOL) }),
+    };
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(policyThrows);
+
+    const { evaluate } = await import('../agents/supervisor.js');
+    vi.mocked(evaluate).mockClear();
+    vi.mocked(evaluate).mockResolvedValue({
+      task_id: 'task-001', action: 'pass', reason: 'acceptable', estimated_cost_usd: 0.01,
+    });
+
+    const { run } = await import('../agents/operator.js');
+    const result = await run(makeTask());
+    expect(vi.mocked(evaluate)).toHaveBeenCalled();
+    expect(result.status).toBe('completed');
+  });
+
+  it('blocks the task when both policy and supervisor fail — never executes ungated', async () => {
+    const policyThrows: Model = {
+      id: 'stub', provider: 'openai',
+      generate: vi.fn().mockRejectedValue(new Error('policy LLM down')),
+    };
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(policyThrows);
+
+    const { evaluate } = await import('../agents/supervisor.js');
+    vi.mocked(evaluate).mockRejectedValue(new Error('supervisor down too'));
+
+    const { run } = await import('../agents/operator.js');
+    const result = await run(makeTask());
+    expect(result.status).toBe('blocked');
+    // the tool call must never have happened: only the policy generate call
+    expect(vi.mocked(policyThrows.generate)).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('operator.run — mitigation identity protection (F-08)', () => {
+  it('a mitigated task cannot change task_id or company_id', async () => {
+    const original = makeTask({ risk_tier: 'high' });
+    const { createModel } = await import('../llm/index.js');
+    const HIGH_POLICY = { allowed: true, risk_tier: 'high', reason: 'External write', escalate_to_human: true };
+    vi.mocked(createModel).mockResolvedValue(modelStub([HIGH_POLICY, VALID_TOOL]));
+
+    const { evaluate } = await import('../agents/supervisor.js');
+    vi.mocked(evaluate).mockResolvedValue({
+      task_id: original.task_id,
+      action: 'mitigate',
+      reason: 'Reduced scope',
+      estimated_cost_usd: 0.02,
+      mitigated_task: makeTask({ task_id: 'EVIL-ID', company_id: 'evil-co', description: 'Read-only version', risk_tier: 'low' }),
+    });
+
+    const { run } = await import('../agents/operator.js');
+    const result = await run(original);
+    expect(result.task_id).toBe(original.task_id);
+    expect(result.company_id).toBe('test-co');
+    expect(result.description).toBe('Read-only version');
+  });
+});
+
+describe('operator.run — typed tool output (F-22)', () => {
+  it('fails the task with a tool-execution error when output does not match ToolOutputSchema', async () => {
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(modelStub([VALID_POLICY, { totally: 'wrong shape' }]));
+
+    const { run } = await import('../agents/operator.js');
+    const result = await run(makeTask());
+    expect(result.status).toBe('failed');
+    expect(result.error?.toLowerCase()).toContain('tool execution failed');
+  });
+});

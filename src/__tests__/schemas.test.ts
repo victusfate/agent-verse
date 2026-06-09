@@ -127,3 +127,25 @@ describe('MonitorReportSchema', () => {
     expect(result.skills_update).toBeNull();
   });
 });
+
+// ── Quality rework slice 4: mitigated_task reuses OperatorTaskSchema (F-23) ──
+
+describe('SupervisorDecisionSchema — mitigated_task', () => {
+  it('applies OperatorTaskSchema defaults to a minimal mitigated task', async () => {
+    const { SupervisorDecisionSchema } = await import('../schemas.js');
+    const decision = SupervisorDecisionSchema.parse({
+      task_id: 't-1',
+      action: 'mitigate',
+      reason: 'shrink scope',
+      estimated_cost_usd: 0.01,
+      mitigated_task: {
+        company_id: 'co-1',
+        role: 'engineering',
+        description: 'reduced task',
+      },
+    });
+    expect(decision.mitigated_task?.status).toBe('pending');
+    expect(decision.mitigated_task?.risk_tier).toBe('low');
+    expect(decision.mitigated_task?.task_id).toBeTruthy();
+  });
+});

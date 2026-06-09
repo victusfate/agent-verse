@@ -142,3 +142,23 @@ describe('supervisor.evaluate — budget hard-halt', () => {
     expect(mockGenerate).toHaveBeenCalled();
   });
 });
+
+// ── Quality rework slice 4: HardHaltSchema conformance (F-24) ─────────────────
+
+describe('supervisor.evaluate — hard-halt event payload', () => {
+  it('records a hard-halt event that conforms to HardHaltSchema', async () => {
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(makeModel({}));
+
+    const { record } = await import('../ledger.js');
+    const { HardHaltSchema } = await import('../schemas.js');
+
+    const exhaustedCtx = { token_budget_usd: 10, tokens_consumed_usd: 10 };
+    const { evaluate } = await import('../agents/supervisor.js');
+    await evaluate(makeTask(), exhaustedCtx);
+
+    const call = vi.mocked(record).mock.calls.find(c => c[1] === 'supervisor.hard_halt');
+    expect(call).toBeDefined();
+    expect(() => HardHaltSchema.parse(call![2])).not.toThrow();
+  });
+});
