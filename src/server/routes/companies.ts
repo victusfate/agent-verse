@@ -35,7 +35,7 @@ export function handleCompany(_req: http.IncomingMessage, res: http.ServerRespon
       : [];
 
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(
-      JSON.stringify({ id, context, skills, task_count: tasks.length, tasks }),
+      JSON.stringify({ id, context, skills, tasks }),
     );
   } catch {
     res.writeHead(500).end(JSON.stringify({ error: 'Internal server error' }));

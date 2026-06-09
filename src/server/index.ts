@@ -8,6 +8,12 @@ export function createServer(dbPath: string): http.Server {
 
   return http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
+
+    if (req.method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'Method not allowed' }));
+      return;
+    }
+
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     const pathname = url.pathname;
 
@@ -16,7 +22,7 @@ export function createServer(dbPath: string): http.Server {
     if (pathname === '/companies')     return handleCompanies(req, res);
     if (pathname.startsWith('/companies/')) return handleCompany(req, res, pathname);
 
-    res.writeHead(404).end(JSON.stringify({ error: 'Not found' }));
+    res.writeHead(404, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'Not found' }));
   });
 }
 
