@@ -55,12 +55,10 @@ const LOW_CONF_TOOL = { deliverable: 'ok', artifacts: [], confidence: 0.1, next_
 // ── Setup: temp dir for companyBrain ─────────────────────────────────────────
 
 let tmpRoot: string;
-let originalCwd: string;
 
 beforeEach(async () => {
-  originalCwd = process.cwd();
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'av-op-'));
-  process.chdir(tmpRoot);
+  process.env['COMPANIES_DIR'] = path.join(tmpRoot, 'companies');
   fs.mkdirSync(path.join(tmpRoot, 'companies', 'test-co'), { recursive: true });
   fs.writeFileSync(
     path.join(tmpRoot, 'companies', 'test-co', 'context_framework.json'),
@@ -70,7 +68,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  process.chdir(originalCwd);
+  delete process.env['COMPANIES_DIR'];
   fs.rmSync(tmpRoot, { recursive: true, force: true });
   vi.restoreAllMocks();
 });

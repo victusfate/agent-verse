@@ -2,9 +2,10 @@ import type http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as brain from '../../companyBrain.js';
+import { resolveCompaniesDir } from '../../paths.js';
 
 function companiesDir(): string {
-  return path.join(process.cwd(), 'companies');
+  return resolveCompaniesDir();
 }
 
 export function handleCompanies(_req: http.IncomingMessage, res: http.ServerResponse): void {

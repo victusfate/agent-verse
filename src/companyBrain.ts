@@ -5,11 +5,10 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-
-const COMPANIES_DIR = 'companies';
+import { resolveCompaniesDir } from './paths.js';
 
 function ventureDir(companyId: string): string {
-  return path.join(COMPANIES_DIR, companyId);
+  return path.join(resolveCompaniesDir(), companyId);
 }
 
 function ensureDir(companyId: string): void {

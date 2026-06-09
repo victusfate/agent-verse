@@ -21,10 +21,8 @@ function get(port: number, urlPath: string): Promise<{ status: number; body: str
 let server: http.Server;
 let port: number;
 let tmpDir: string;
-let origCwd: string;
 
 beforeEach(async () => {
-  origCwd = process.cwd();
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'av-co-'));
   const dbPath = path.join(tmpDir, 'ledger.db');
   const db = new DatabaseSync(dbPath);
@@ -38,7 +36,7 @@ beforeEach(async () => {
   fs.writeFileSync(path.join(coDir, 'skills.md'), '# Skills\n');
   fs.writeFileSync(path.join(coDir, 'task_log.jsonl'), JSON.stringify({ task_id: 'x', status: 'completed' }) + '\n');
 
-  process.chdir(tmpDir);
+  process.env['COMPANIES_DIR'] = path.join(tmpDir, 'companies');
   server = createServer(dbPath);
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   port = (server.address() as { port: number }).port;
@@ -46,7 +44,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await new Promise<void>((r, e) => server.close(err => err ? e(err) : r()));
-  process.chdir(origCwd);
+  delete process.env['COMPANIES_DIR'];
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 

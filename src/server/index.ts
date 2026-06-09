@@ -1,20 +1,18 @@
 import http from 'node:http';
-import { DatabaseSync } from 'node:sqlite';
-import { initDb } from '../ledger.js';
+import { createLedger, defaultDbPath } from '../ledger.js';
 import { handleEventsRange, handleEventsStream } from './routes/events.js';
 import { handleCompanies, handleCompany } from './routes/companies.js';
 
 export function createServer(dbPath: string): http.Server {
-  const db = new DatabaseSync(dbPath);
-  initDb(db);
+  const ledger = createLedger(dbPath);
 
   return http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     const pathname = url.pathname;
 
-    if (pathname === '/events/stream') return handleEventsStream(db, req, res);
-    if (pathname === '/events')        return handleEventsRange(db, req, res);
+    if (pathname === '/events/stream') return handleEventsStream(ledger, req, res);
+    if (pathname === '/events')        return handleEventsRange(ledger, req, res);
     if (pathname === '/companies')     return handleCompanies(req, res);
     if (pathname.startsWith('/companies/')) return handleCompany(req, res, pathname);
 
@@ -23,7 +21,7 @@ export function createServer(dbPath: string): http.Server {
 }
 
 if (process.argv[1]?.endsWith('server/index.ts') || process.argv[1]?.endsWith('server/index.js')) {
-  const dbPath = process.env['LEDGER_PATH'] ?? 'companies/ledger.db';
+  const dbPath = process.env['LEDGER_PATH'] ?? defaultDbPath();
   const port = Number(process.env['PORT'] ?? 3001);
   createServer(dbPath).listen(port, () => console.log(`Dashboard API listening on http://localhost:${port}`));
 }

@@ -55,17 +55,15 @@ const CONTINUE_REPORT: MonitorReport = { ...DONE_REPORT, iteration_complete: fal
 // ── Setup: temp dir for companyBrain ─────────────────────────────────────────
 
 let tmpRoot: string;
-let originalCwd: string;
 
 beforeEach(() => {
-  originalCwd = process.cwd();
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'av-graph-'));
-  process.chdir(tmpRoot);
+  process.env['COMPANIES_DIR'] = path.join(tmpRoot, 'companies');
   vi.clearAllMocks();
 });
 
 afterEach(() => {
-  process.chdir(originalCwd);
+  delete process.env['COMPANIES_DIR'];
   fs.rmSync(tmpRoot, { recursive: true, force: true });
   vi.restoreAllMocks();
 });

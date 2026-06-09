@@ -16,9 +16,8 @@ import { fileURLToPath } from 'node:url';
 import type { VenturePayload } from './schemas.js';
 import { detectProvider, type LlmProviderType } from './llm/index.js';
 import { MAX_MONITOR_CYCLES, runGraph } from './graph.js';
-import { DB_PATH } from './ledger.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { defaultDbPath } from './ledger.js';
+import { resolveCompaniesDir } from './paths.js';
 
 function checkCredentials(modelId: string, provider: LlmProviderType): void {
   const required: Partial<Record<LlmProviderType, string>> = {
@@ -96,9 +95,9 @@ async function main(): Promise<void> {
   const report = finalState.monitorReport;
   console.log(`  Monitor:   ${report?.mitigation_type ?? 'n/a'}`);
 
-  const brainDir = path.join(__dirname, '..', 'companies', finalState.companyId);
+  const brainDir = path.join(resolveCompaniesDir(), finalState.companyId);
   console.log(`  Brain:     ${brainDir}`);
-  console.log(`  Ledger:    ${DB_PATH}`);
+  console.log(`  Ledger:    ${defaultDbPath()}`);
   console.log();
 }
 
