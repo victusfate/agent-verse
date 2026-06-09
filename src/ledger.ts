@@ -3,7 +3,7 @@
  * Every agent action, tool call, policy decision, and telemetry event is
  * written here. Nothing is ever deleted or updated.
  *
- * Uses the built-in node:sqlite module (Node >= 22.5).
+ * Uses the built-in node:sqlite module (unflagged since Node 22.13).
  */
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import fs from 'node:fs';

@@ -41,7 +41,7 @@ simulated end-to-end run green.
 - Status: done
 - maxCycles in AgentState (export-let + crashing dynamic import deleted); --max-cycles
   verified working end-to-end in simulated mode; completed/halted tasks skipped and merged
-  back by task_id; parseCliArgs strict with VenturePayloadSchema validation; engines >=22.5.
+  back by task_id; parseCliArgs strict with VenturePayloadSchema validation; engines >=22.13 (node:sqlite unflagged from 22.13).
 
 ## Slice 6 — Server hygiene (F-15, F-30, F-33)
 - Status: done
