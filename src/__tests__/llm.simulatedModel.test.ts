@@ -1,30 +1,40 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { SimulatedModel } from '../llm/simulated.js';
+import { FIXTURES } from '../simulation/fixtures.js';
+import { OperatorTaskSchema } from '../schemas.js';
 
-describe('SimulatedModel — fixture lookup', () => {
-  it('returns a JSON string for a known fixture key', async () => {
+describe('SimulatedModel — explicit fixture keys', () => {
+  it('returns the fixture for a known key', async () => {
     const model = new SimulatedModel();
-    const { text: result } = await model.generate('You are the Product-Agent.', 'Execute this task');
-    const parsed = JSON.parse(result);
+    const { text } = await model.generate('sys', 'prompt', { fixtureKey: 'product:tool' });
+    const parsed = JSON.parse(text);
     expect(parsed).toHaveProperty('deliverable');
   });
 
-  it('is deterministic — same system prompt returns same output', async () => {
+  it('is deterministic — same key returns same output', async () => {
     const model = new SimulatedModel();
-    const system = 'You are the Engineering-Agent.';
-    const { text: a } = await model.generate(system, 'task 1');
-    const { text: b } = await model.generate(system, 'task 2');
+    const { text: a } = await model.generate('sys', 'task 1', { fixtureKey: 'engineering:tool' });
+    const { text: b } = await model.generate('other sys', 'task 2', { fixtureKey: 'engineering:tool' });
     expect(a).toBe(b);
   });
 
-  it('returns a fallback fixture and warns when key is unknown', async () => {
-    const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  it('throws when fixtureKey is not provided', async () => {
     const model = new SimulatedModel();
-    const { text: result } = await model.generate('You are an unknown-agent.', 'task');
-    const parsed = JSON.parse(result);
-    expect(parsed).toHaveProperty('deliverable');
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
+    await expect(model.generate('sys', 'prompt')).rejects.toThrow(/fixtureKey/);
+  });
+
+  it('throws on an unknown fixture key instead of falling back', async () => {
+    const model = new SimulatedModel();
+    await expect(model.generate('sys', 'prompt', { fixtureKey: 'nope:nothing' }))
+      .rejects.toThrow(/nope:nothing/);
+  });
+
+  it('returns the supervisor fixture for supervisor:policy', async () => {
+    const model = new SimulatedModel();
+    const { text } = await model.generate('sys', 'prompt', { fixtureKey: 'supervisor:policy' });
+    const parsed = JSON.parse(text);
+    expect(parsed).toHaveProperty('action');
+    expect(parsed).toHaveProperty('reason');
   });
 
   it('exposes provider as simulated', () => {
@@ -36,22 +46,20 @@ describe('SimulatedModel — fixture lookup', () => {
   });
 });
 
-// ops-hardening slice 2: BUG-3
-describe('SimulatedModel — supervisor fixture', () => {
-  it('returns supervisor fixture (not FALLBACK) when called with supervisor system prompt (BUG-3)', async () => {
-    const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const model = new SimulatedModel();
-    const { text: result } = await model.generate(
-      'You are a Supervisor agent. Evaluate risk.',
-      'Evaluate this task:\nBuild a registration endpoint',
-    );
-    const parsed = JSON.parse(result);
-    // The supervisor fixture should have action/reason/estimated_cost_usd
-    expect(parsed).toHaveProperty('action');
-    expect(parsed).toHaveProperty('reason');
-    // No fallback warning should be emitted
-    expect(warnSpy).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
+describe('fixture map — covers every key production agents use', () => {
+  const roles = OperatorTaskSchema.shape.role.options;
+
+  it('has a :policy and :tool fixture for every operator role', () => {
+    for (const role of roles) {
+      expect(FIXTURES, `missing ${role}:policy`).toHaveProperty(`${role}:policy`);
+      expect(FIXTURES, `missing ${role}:tool`).toHaveProperty(`${role}:tool`);
+    }
+  });
+
+  it('has fixtures for the static agent keys', () => {
+    for (const key of ['idea:generate', 'ceo:init', 'supervisor:policy', 'monitor:diagnose']) {
+      expect(FIXTURES, `missing ${key}`).toHaveProperty(key);
+    }
   });
 });
 
