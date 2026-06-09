@@ -69,6 +69,7 @@ Prefer mitigation over halting whenever possible.`,
   const { text: raw } = await model.generate(system, `Evaluate this task:\n${task.description}`, {
     jsonMode: true,
     maxTokens: 1024,
+    fixtureKey: 'supervisor:policy',
   });
 
   const raw_parsed = parseModelJson(raw) as Record<string, unknown>;

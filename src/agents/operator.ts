@@ -54,6 +54,7 @@ Rules:
   const { text: raw } = await model.generate(system, `Evaluate this task:\n${task.description}`, {
     jsonMode: true,
     maxTokens: 512,
+    fixtureKey: `${task.role}:policy`,
   });
   return PolicyDecisionSchema.parse(parseModelJson(raw));
 }
@@ -85,6 +86,7 @@ ${skills.slice(0, 2000)}`,
   const { text: raw } = await model.generate(system, `Execute this task:\n\n${task.description}`, {
     jsonMode: true,
     maxTokens: 2048,
+    fixtureKey: `${task.role}:tool`,
   });
   return parseModelJson(raw) as Record<string, unknown>;
 }

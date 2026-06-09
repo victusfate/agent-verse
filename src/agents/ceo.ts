@@ -41,7 +41,7 @@ export async function run(venture: VenturePayload): Promise<[string, OperatorTas
   const { text: raw } = await model.generate(
     withJsonSchema(SYSTEM_PROMPT, SCHEMA_HINT),
     `Initialise company for this venture:\n\n${JSON.stringify(venture, null, 2)}`,
-    { jsonMode: true, maxTokens: 2048 },
+    { jsonMode: true, maxTokens: 2048, fixtureKey: 'ceo:init' },
   );
 
   const init = BrainInitSchema.parse(parseModelJson(raw));

@@ -18,11 +18,10 @@ const SUPERVISOR_OUTPUT = JSON.stringify({
   estimated_cost_usd: 0.01,
 });
 
+// Shaped like the Monitor-Agent's prompted SCHEMA_HINT (friction_summary),
+// not the final MonitorReport — the agent maps it into the report itself.
 const MONITOR_OUTPUT = JSON.stringify({
-  company_id: 'sim-co',
-  cycle: 1,
-  friction_points: [],
-  diagnosis: 'No friction detected in simulation.',
+  friction_summary: 'No friction detected in simulation.',
   mitigation_type: 'none',
   skills_update: null,
   iteration_complete: true,
@@ -52,7 +51,6 @@ const CEO_OUTPUT = JSON.stringify({
   ],
 });
 
-export const FALLBACK = TOOL_OUTPUT;
 
 export const FIXTURES: Record<string, string> = {
   'product:tool': TOOL_OUTPUT,

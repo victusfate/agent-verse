@@ -35,7 +35,7 @@ export async function run(seedPrompt?: string): Promise<VenturePayload> {
   const { text: raw } = await model.generate(
     withJsonSchema(SYSTEM_PROMPT, SCHEMA_HINT),
     userPrompt,
-    { jsonMode: true, temperature: 0.7 },
+    { jsonMode: true, temperature: 0.7, fixtureKey: 'idea:generate' },
   );
 
   const payload = VenturePayloadSchema.parse(parseModelJson(raw));
