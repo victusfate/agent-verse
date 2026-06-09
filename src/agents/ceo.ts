@@ -38,7 +38,7 @@ export async function run(venture: VenturePayload): Promise<[string, OperatorTas
   record(companyId, 'company.created', { venture }, 'ceo');
 
   const model = await createModel();
-  const raw = await model.generate(
+  const { text: raw } = await model.generate(
     withJsonSchema(SYSTEM_PROMPT, SCHEMA_HINT),
     `Initialise company for this venture:\n\n${JSON.stringify(venture, null, 2)}`,
     { jsonMode: true, maxTokens: 2048 },

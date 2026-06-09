@@ -51,7 +51,7 @@ Rules:
 - Remaining token budget: $${budgetRemaining.toFixed(2)} USD`,
     POLICY_SCHEMA,
   );
-  const raw = await model.generate(system, `Evaluate this task:\n${task.description}`, {
+  const { text: raw } = await model.generate(system, `Evaluate this task:\n${task.description}`, {
     jsonMode: true,
     maxTokens: 512,
   });
@@ -82,7 +82,7 @@ Company skills:
 ${skills.slice(0, 2000)}`,
     EXECUTE_SCHEMA,
   );
-  const raw = await model.generate(system, `Execute this task:\n\n${task.description}`, {
+  const { text: raw } = await model.generate(system, `Execute this task:\n\n${task.description}`, {
     jsonMode: true,
     maxTokens: 2048,
   });

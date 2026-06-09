@@ -37,7 +37,7 @@ function modelStub(canned: Record<string, unknown>[]): Model {
   let call = 0;
   return {
     id: 'stub', provider: 'openai',
-    generate: vi.fn(async () => JSON.stringify(canned[call++ % canned.length])),
+    generate: vi.fn(async () => ({ text: JSON.stringify(canned[call++ % canned.length]) })),
   };
 }
 
@@ -193,7 +193,7 @@ describe('operator.run — failure paths (slice 7)', () => {
     const throwingModel: Model = {
       id: 'stub', provider: 'openai',
       generate: vi.fn()
-        .mockResolvedValueOnce(JSON.stringify(VALID_POLICY))
+        .mockResolvedValueOnce({ text: JSON.stringify(VALID_POLICY) })
         .mockRejectedValueOnce(new Error('network timeout')),
     };
     const { createModel } = await import('../llm/index.js');

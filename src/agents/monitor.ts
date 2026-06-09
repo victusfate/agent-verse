@@ -56,7 +56,7 @@ export async function run(
   }, null, 2);
 
   const model = await createModel();
-  const raw = await model.generate(
+  const { text: raw } = await model.generate(
     withJsonSchema(SYSTEM_PROMPT, SCHEMA_HINT),
     `Analyse this execution cycle and diagnose any friction:\n\n${analysisPayload}\n\n` +
     `Cycle ${cycle}: ${failures.length === 0 ? 'All tasks succeeded.' : `${failures.length} failures detected.`} ` +

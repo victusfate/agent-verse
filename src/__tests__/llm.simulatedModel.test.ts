@@ -4,7 +4,7 @@ import { SimulatedModel } from '../llm/simulated.js';
 describe('SimulatedModel — fixture lookup', () => {
   it('returns a JSON string for a known fixture key', async () => {
     const model = new SimulatedModel();
-    const result = await model.generate('You are the Product-Agent.', 'Execute this task');
+    const { text: result } = await model.generate('You are the Product-Agent.', 'Execute this task');
     const parsed = JSON.parse(result);
     expect(parsed).toHaveProperty('deliverable');
   });
@@ -12,15 +12,15 @@ describe('SimulatedModel — fixture lookup', () => {
   it('is deterministic — same system prompt returns same output', async () => {
     const model = new SimulatedModel();
     const system = 'You are the Engineering-Agent.';
-    const a = await model.generate(system, 'task 1');
-    const b = await model.generate(system, 'task 2');
+    const { text: a } = await model.generate(system, 'task 1');
+    const { text: b } = await model.generate(system, 'task 2');
     expect(a).toBe(b);
   });
 
   it('returns a fallback fixture and warns when key is unknown', async () => {
     const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const model = new SimulatedModel();
-    const result = await model.generate('You are an unknown-agent.', 'task');
+    const { text: result } = await model.generate('You are an unknown-agent.', 'task');
     const parsed = JSON.parse(result);
     expect(parsed).toHaveProperty('deliverable');
     expect(warnSpy).toHaveBeenCalled();
@@ -41,7 +41,7 @@ describe('SimulatedModel — supervisor fixture', () => {
   it('returns supervisor fixture (not FALLBACK) when called with supervisor system prompt (BUG-3)', async () => {
     const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const model = new SimulatedModel();
-    const result = await model.generate(
+    const { text: result } = await model.generate(
       'You are a Supervisor agent. Evaluate risk.',
       'Evaluate this task:\nBuild a registration endpoint',
     );

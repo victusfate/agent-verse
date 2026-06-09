@@ -1,5 +1,5 @@
 import { FIXTURES, FALLBACK } from '../simulation/fixtures.js';
-import type { Model, LlmRequestOptions } from './index.js';
+import type { Model, LlmRequestOptions, GenerateResult } from './index.js';
 
 const ROLE_KEYWORDS: [string, string][] = [
   ['Product-Agent', 'product'],
@@ -39,15 +39,15 @@ export class SimulatedModel implements Model {
   readonly provider = 'simulated' as const;
   readonly id = 'fixture';
 
-  generate(systemInstruction: string, prompt: string, _options?: LlmRequestOptions): Promise<string> {
+  generate(systemInstruction: string, prompt: string, _options?: LlmRequestOptions): Promise<GenerateResult> {
     const key = resolveKey(systemInstruction, prompt);
     const fixture = FIXTURES[key];
 
     if (!fixture) {
       process.stderr.write(`[SimulatedModel] No fixture for key "${key}" — using fallback\n`);
-      return Promise.resolve(FALLBACK);
+      return Promise.resolve({ text: FALLBACK });
     }
 
-    return Promise.resolve(fixture);
+    return Promise.resolve({ text: fixture });
   }
 }

@@ -39,7 +39,7 @@ describe.skipIf(skip)('CLI agent smoke test', () => {
     const model = await createModel(`cli:${CLI_CMD}`);
     expect(model.provider).toBe('cli');
 
-    const result = await model.generate(
+    const { text: result } = await model.generate(
       'You are the Engineering-Agent. Respond with a JSON object.',
       JSON.stringify({
         deliverable: 'Describe a REST API design in one sentence.',

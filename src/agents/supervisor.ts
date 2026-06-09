@@ -66,7 +66,7 @@ Prefer mitigation over halting whenever possible.`,
     SUPERVISOR_SCHEMA,
   );
 
-  const raw = await model.generate(system, `Evaluate this task:\n${task.description}`, {
+  const { text: raw } = await model.generate(system, `Evaluate this task:\n${task.description}`, {
     jsonMode: true,
     maxTokens: 1024,
   });
