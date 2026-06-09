@@ -13,7 +13,10 @@ import * as ceoAgent from './agents/ceo.js';
 import * as operatorAgent from './agents/operator.js';
 import * as monitorAgent from './agents/monitor.js';
 
-export let MAX_MONITOR_CYCLES = 3;
+export const DEFAULT_MAX_CYCLES = 3;
+
+/** Terminal task states the monitor loop must not re-run. */
+const SETTLED = new Set<OperatorTask['status']>(['completed', 'halted']);
 
 export interface AgentState {
   venturePayload: VenturePayload | null;
@@ -23,6 +26,7 @@ export interface AgentState {
   cycle: number;
   monitorReport: MonitorReport | null;
   iterationComplete: boolean;
+  maxCycles: number;
 }
 
 export async function runGraph(initial: Partial<AgentState> = {}): Promise<AgentState> {
@@ -34,6 +38,7 @@ export async function runGraph(initial: Partial<AgentState> = {}): Promise<Agent
     cycle: 0,
     monitorReport: null,
     iterationComplete: false,
+    maxCycles: DEFAULT_MAX_CYCLES,
     ...initial,
   };
 
@@ -49,12 +54,12 @@ export async function runGraph(initial: Partial<AgentState> = {}): Promise<Agent
   state = { ...state, companyId, operatorTasks: tasks };
 
   // ── Loop: Operators → Monitor ─────────────────────────────────────────────
-  while (!state.iterationComplete && state.cycle < MAX_MONITOR_CYCLES) {
-    // Run all three operator agents in parallel
-    const updatedTasks = await Promise.all(
-      state.operatorTasks.map(task => operatorAgent.run(task)),
-    );
-    state.operatorTasks = updatedTasks;
+  while (!state.iterationComplete && state.cycle < state.maxCycles) {
+    // Run the still-runnable operator tasks in parallel; settled tasks stay as-is
+    const runnable = state.operatorTasks.filter(t => !SETTLED.has(t.status));
+    const updatedTasks = await Promise.all(runnable.map(task => operatorAgent.run(task)));
+    const byId = new Map(updatedTasks.map(t => [t.task_id, t]));
+    state.operatorTasks = state.operatorTasks.map(t => byId.get(t.task_id) ?? t);
 
     // Monitor — may update skills.md and decide iteration_complete
     state.cycle += 1;

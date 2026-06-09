@@ -10,14 +10,12 @@
  *   npm start -- --venture '{"company_name":"pdf-ocr-api",...}'
  *   npm start -- --max-cycles 2
  */
-import { parseArgs } from 'node:util';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import type { VenturePayload } from './schemas.js';
 import { detectProvider, type LlmProviderType } from './llm/index.js';
-import { MAX_MONITOR_CYCLES, runGraph } from './graph.js';
+import { runGraph } from './graph.js';
 import { defaultDbPath } from './ledger.js';
 import { resolveCompaniesDir } from './paths.js';
+import { parseCliArgs } from './cliArgs.js';
 
 function checkCredentials(modelId: string, provider: LlmProviderType): void {
   const required: Partial<Record<LlmProviderType, string>> = {
@@ -37,32 +35,14 @@ function checkCredentials(modelId: string, provider: LlmProviderType): void {
 }
 
 async function main(): Promise<void> {
-  const { values } = parseArgs({
-    options: {
-      seed:        { type: 'string' },
-      venture:     { type: 'string' },
-      model:       { type: 'string' },
-      provider:    { type: 'string' },
-      'max-cycles': { type: 'string' },
-    },
-    allowPositionals: false,
-    strict: false,
-  });
+  const args = parseCliArgs(process.argv.slice(2));
 
   // Apply model/provider overrides before anything imports the env
-  if (values.model)    process.env['AGENT_MODEL']    = values.model as string;
-  if (values.provider) process.env['AGENT_PROVIDER'] = values.provider as string;
+  if (args.model)    process.env['AGENT_MODEL']    = args.model;
+  if (args.provider) process.env['AGENT_PROVIDER'] = args.provider;
 
   const modelId  = process.env['AGENT_MODEL']    ?? 'claude-sonnet-4-6';
   const provider = (process.env['AGENT_PROVIDER'] as LlmProviderType | undefined) ?? detectProvider(modelId);
-
-  if (values['max-cycles']) {
-    const n = parseInt(values['max-cycles'] as string, 10);
-    if (!isNaN(n)) {
-      const graphModule = await import('./graph.js');
-      graphModule.MAX_MONITOR_CYCLES = n;
-    }
-  }
 
   checkCredentials(modelId, provider);
 
@@ -71,13 +51,10 @@ async function main(): Promise<void> {
   console.log('='.repeat(60));
   console.log();
 
-  const initialVenture = values.venture
-    ? JSON.parse(values.venture as string) as VenturePayload
-    : null;
-
   const finalState = await runGraph({
-    venturePayload: initialVenture,
-    seedPrompt: values.seed as string | undefined ?? null,
+    venturePayload: args.venture,
+    seedPrompt: args.seed ?? null,
+    ...(args.maxCycles !== undefined ? { maxCycles: args.maxCycles } : {}),
   });
 
   // ── Summary ───────────────────────────────────────────────────────────────
@@ -102,6 +79,6 @@ async function main(): Promise<void> {
 }
 
 main().catch(err => {
-  console.error(err);
+  console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });

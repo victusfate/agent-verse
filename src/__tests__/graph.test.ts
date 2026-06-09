@@ -121,11 +121,11 @@ describe('runGraph — orchestration (slice 8)', () => {
     expect(vi.mocked(monRun)).toHaveBeenCalledTimes(1);
   });
 
-  it('loop caps at MAX_MONITOR_CYCLES when monitor never completes', async () => {
+  it('loop caps at DEFAULT_MAX_CYCLES when monitor never completes', async () => {
     const { run: ceoRun } = await import('../agents/ceo.js');
     const { run: opRun } = await import('../agents/operator.js');
     const { run: monRun } = await import('../agents/monitor.js');
-    const { MAX_MONITOR_CYCLES, runGraph } = await import('../graph.js');
+    const { DEFAULT_MAX_CYCLES, runGraph } = await import('../graph.js');
 
     vi.mocked(ceoRun).mockResolvedValue(['co-123', TASKS]);
     vi.mocked(opRun).mockImplementation(async t => t);
@@ -133,8 +133,8 @@ describe('runGraph — orchestration (slice 8)', () => {
 
     const state = await runGraph({ venturePayload: VENTURE });
 
-    expect(state.cycle).toBe(MAX_MONITOR_CYCLES);
-    expect(vi.mocked(monRun)).toHaveBeenCalledTimes(MAX_MONITOR_CYCLES);
+    expect(state.cycle).toBe(DEFAULT_MAX_CYCLES);
+    expect(vi.mocked(monRun)).toHaveBeenCalledTimes(DEFAULT_MAX_CYCLES);
   });
 });
 
