@@ -16,6 +16,8 @@ This design consolidates their findings and decides how each class will be fixed
 | Fail-open / fail-closed | Whether a guard that errors lets the action proceed (open) or blocks it (closed). |
 | Fixture key | An explicit identifier an agent passes to `SimulatedModel` to select a canned response, replacing prompt-keyword sniffing. |
 | Ledger handle | A ledger instance created by `createLedger(dbPath)`, closing over one `DatabaseSync` — replaces the module-level singleton. |
+| Operator layers (L1–L5) | The five sequential stages of `operator.run()`: L1 task intake → L2 policy/escalation → L3 tool execution → L4 quality gate → L5 ledger/brain writes. |
+| Monitor cycle | One iteration of the graph loop in `runGraph`: monitor reviews state, operators run tasks, capped by `maxCycles`. |
 
 ## Findings
 
@@ -98,9 +100,12 @@ Severity: **high** = verifiably broken behavior or untested safety control; **me
 Grouped by fix class, not finding-by-finding. Each class is a candidate vertical slice for the plan.
 
 **D1 — Repair the safety controls (F-03, F-06, F-07, F-08).**
-Budget accounting: providers return token usage where the SDK exposes it; the operator
-accumulates an estimated USD cost into `tokens_consumed_usd` after every LLM call (a small
-per-provider price table; unknown providers estimate from characters). Policy layer becomes
+Budget accounting: the `Model.generate` contract is extended to return
+`{ text, usage?: { inputTokens, outputTokens } }` — providers fill `usage` where their SDK
+exposes it; the operator converts usage to an estimated USD cost (small per-provider price
+table; absent usage falls back to a character-based estimate) and accumulates it into
+`tokens_consumed_usd` after every LLM call. Providers report; only the operator prices and
+accumulates. Policy layer becomes
 fail-closed: a `policyCheck` error escalates to the supervisor instead of proceeding; if the
 supervisor also fails, the task is marked `blocked`, never silently executed. The graph loop
 skips tasks whose status is `completed` or `halted`. The mitigation spread excludes identity
