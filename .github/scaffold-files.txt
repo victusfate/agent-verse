@@ -1,5 +1,6 @@
 AGENTS.md
 CLAUDE.md
+CODEOWNERS
 GEMINI.md
 docs/agent-authoring-requirements.md
 .claudeignore
@@ -15,6 +16,8 @@ scripts/check-resolvable.mjs
 scripts/update-readme-skills.mjs
 tools/hoist-skill/tool.yaml
 tools/hoist-skill/run
+tools/hoist-skill/hoist.mjs
+tools/lib/safe-write.mjs
 tools/hoist-skill/test
 tools/hoist-skill/README.md
 skills/hoist-skill.md
@@ -96,3 +99,8 @@ skills/resume.md
 .agents/skills/resume/SKILL.md
 .agent/workflows/pause.md
 .agent/workflows/resume.md
+skills/protect-branch.md
+.claude/skills/protect-branch/SKILL.md
+.cursor/rules/protect-branch.mdc
+.agents/skills/protect-branch/SKILL.md
+.agent/workflows/protect-branch.md

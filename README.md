@@ -234,7 +234,7 @@ Tests live in `src/__tests__/` and cover schemas, graph state machine, ledger op
 
 The `/feature-chain` skill drives the full design → PRD → TDD → review loop.
 <!-- BEGIN_SKILLS_INVOCATION -->
-Skills can also be invoked individually: `/feature-chain`, `/grill-with-docs`, `/to-prd`, `/tdd`, `/design-review`, `/code-quality-review`, `/skillify`, `/sync-scaffold`, `/create-pr`, `/code-review`, `/simplify`, `/prune`, `/pause`, `/resume`, `/hoist-skill`.
+Skills can also be invoked individually: `/feature-chain`, `/grill-with-docs`, `/to-prd`, `/tdd`, `/design-review`, `/code-quality-review`, `/skillify`, `/sync-scaffold`, `/create-pr`, `/code-review`, `/simplify`, `/prune`, `/pause`, `/resume`, `/hoist-skill`, `/protect-branch`.
 <!-- END_SKILLS_INVOCATION -->
 
 ---
@@ -258,9 +258,22 @@ Skills can also be invoked individually: `/feature-chain`, `/grill-with-docs`, `
 AGENTS.md                        # agent instructions — single source of truth
 CLAUDE.md                        # imports AGENTS.md (@AGENTS.md)
 GEMINI.md                        # references AGENTS.md
+package.json                     # npm entry (bin/sync) — name, version, engines, test scripts
+docs/
+  agent-authoring-requirements.md  # normative spec for tools, scripts, skills, bin
 bin/
   bootstrap.sh                   # one-time setup for downstream repos
   sync-from-scaffold.sh          # pull scaffold updates into a downstream repo
+  sync                           # npx entrypoint → tools/sync/run.mjs
+  install-skills.sh              # copy skills into a global dir (e.g. ~/.claude/skills)
+  globalize-skill.sh             # promote one skill into a global dir, imports inlined
+  repo-bound-skills.txt          # shared guard list for the two installers
+tools/
+  README.md                      # capability index (spec §2 registration)
+  lib/
+    safe-write.mjs               # shared clobber-safe write engine (sidecars, .scaffold-keep)
+  hoist-skill/                   # tool: emit skills into a consumer repo (tool.yaml, run, hoist.mjs, test)
+  sync/                          # tool: npx consumer sync (tool.yaml, run.mjs, policy.mjs, promote.mjs, test)
 .claude/
   skills/
     RESOLVER.md                   # central routing table — skill → regex → path
@@ -279,6 +292,7 @@ bin/
     pause/SKILL.md                # Checkpoint the session into git — write a handoff, commit work in flight, and push so any device can resume
     resume/SKILL.md               # Reload a checkpointed session from the pushed handoff and continue from its next steps, cold or cross-device
     hoist-skill/SKILL.md          # Hoist scaffold capabilities into a consumer repo in the target harness format
+    protect-branch/SKILL.md       # Open GitHub branch protection settings for the current repo and show a targeted configuration checklist
   session-start/
     hook.sh                      # SessionStart hook: fetches origin/main, warns if branch is behind
   read-once/
@@ -303,6 +317,7 @@ bin/
     pause.mdc                # mirrors pause for Cursor
     resume.mdc               # mirrors resume for Cursor
     hoist-skill.mdc          # mirrors hoist-skill for Cursor
+    protect-branch.mdc       # mirrors protect-branch for Cursor
 .agents/
   skills/
     feature-chain/SKILL.md        # Orchestrate design → PRD → TDD → review end to end
@@ -320,6 +335,7 @@ bin/
     pause/SKILL.md                # Checkpoint the session into git — write a handoff, commit work in flight, and push so any device can resume
     resume/SKILL.md               # Reload a checkpointed session from the pushed handoff and continue from its next steps, cold or cross-device
     hoist-skill/SKILL.md          # Hoist scaffold capabilities into a consumer repo in the target harness format
+    protect-branch/SKILL.md       # Open GitHub branch protection settings for the current repo and show a targeted configuration checklist
 .agent/
   rules/
     agents.md               # thin pointer to AGENTS.md (always-on)
@@ -339,14 +355,20 @@ bin/
     pause.md                # Checkpoint the session into git — write a handoff, commit work in flight, and push so any device can resume
     resume.md               # Reload a checkpointed session from the pushed handoff and continue from its next steps, cold or cross-device
     hoist-skill.md          # Hoist scaffold capabilities into a consumer repo in the target harness format
+    protect-branch.md       # Open GitHub branch protection settings for the current repo and show a targeted configuration checklist
 scripts/
-  check-resolvable.mjs           # RESOLVER linter (reachability/ambiguity/DRY/MECE/cursor/antigravity/sync)
+  check-resolvable.mjs           # RESOLVER linter (reachability/ambiguity/DRY/MECE/parity/sync)
   update-readme-skills.mjs       # regenerate README.md skill sections from RESOLVER.md
+  compute-bump.mjs               # conventional-commit version bump (used by version-bump.yml)
+  test-sync.sh                   # isolated tests for bin/sync-from-scaffold.sh
+  test-bootstrap.sh              # isolated tests for bin/bootstrap.sh
 .githooks/
   pre-commit                     # runs the linter and README freshness check — enable via core.hooksPath
 .github/
   scaffold-files.txt             # manifest of files managed by scaffold
   workflows/
+    ci.yml                       # verify (npm test) + integration jobs on PRs
+    version-bump.yml             # post-merge version bump + tag on main
     sync-scaffold.yml            # manual workflow to sync updates via PR
 .claudeignore                    # excludes build artifacts from Claude's context
 ```
