@@ -57,14 +57,15 @@ describe('GET /companies', () => {
 });
 
 describe('GET /companies/:id', () => {
-  it('returns company context and skills for a known company', async () => {
+  it('returns company context, skills, and tasks for a known company', async () => {
     const res = await get(port, '/companies/acme-co');
     expect(res.status).toBe(200);
-    const body = JSON.parse(res.body) as { id: string; context: { mission: string }; skills: string; task_count: number };
+    const body = JSON.parse(res.body) as { id: string; context: { mission: string }; skills: string; tasks: unknown[] };
     expect(body.id).toBe('acme-co');
     expect(body.context.mission).toBe('Test');
     expect(body.skills).toContain('# Skills');
-    expect(body.task_count).toBe(1);
+    expect(body.tasks).toHaveLength(1);
+    expect(body).not.toHaveProperty('task_count');
   });
 
   it('returns 404 for an unknown company', async () => {
