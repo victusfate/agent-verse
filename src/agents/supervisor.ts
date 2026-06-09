@@ -1,4 +1,4 @@
-import { SupervisorDecisionSchema, type OperatorTask, type SupervisorDecision } from '../schemas.js';
+import { SupervisorDecisionSchema, HardHaltSchema, type OperatorTask, type SupervisorDecision } from '../schemas.js';
 import { withJsonSchema, parseModelJson, createModel } from '../llm/index.js';
 import { record } from '../ledger.js';
 
@@ -41,11 +41,12 @@ export async function evaluate(
       reason: `Budget exhausted: $${remaining.toFixed(4)} remaining of $${budgetCtx.token_budget_usd} ceiling`,
       estimated_cost_usd: 0,
     };
-    record(task.company_id, 'supervisor.hard_halt', {
+    record(task.company_id, 'supervisor.hard_halt', HardHaltSchema.parse({
+      company_id: task.company_id,
       task_id: task.task_id,
       reason: 'budget_exceeded',
       detail: decision.reason,
-    }, 'supervisor');
+    }), 'supervisor');
     return decision;
   }
 
@@ -60,7 +61,7 @@ You have three options:
 
 Irreversibility criteria (any match → halt): ${IRREVERSIBILITY_CRITERIA}
 
-Remaining budget: $${(budgetCtx.token_budget_usd - budgetCtx.tokens_consumed_usd).toFixed(2)} USD
+Remaining budget: $${remaining.toFixed(2)} USD
 
 Prefer mitigation over halting whenever possible.`,
     SUPERVISOR_SCHEMA,

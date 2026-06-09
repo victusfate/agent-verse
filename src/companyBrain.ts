@@ -29,6 +29,14 @@ export function readContextFramework(companyId: string): Record<string, unknown>
   return JSON.parse(fs.readFileSync(p, 'utf-8')) as Record<string, unknown>;
 }
 
+/** Accumulate estimated LLM spend into the venture's tokens_consumed_usd. */
+export function addConsumedCost(companyId: string, costUsd: number): void {
+  if (costUsd <= 0) return;
+  const ctx = readContextFramework(companyId);
+  const consumed = Number(ctx['tokens_consumed_usd'] ?? 0);
+  writeContextFramework(companyId, { ...ctx, tokens_consumed_usd: consumed + costUsd });
+}
+
 export function writeSkills(companyId: string, content: string): void {
   ensureDir(companyId);
   fs.writeFileSync(path.join(ventureDir(companyId), 'skills.md'), content);

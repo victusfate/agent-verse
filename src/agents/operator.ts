@@ -11,12 +11,16 @@ import {
   PolicyDecisionSchema,
   QualityGateResultSchema,
   TelemetryEntrySchema,
+  ToolOutputSchema,
   type OperatorTask,
   type PolicyDecision,
   type QualityGateResult,
+  type SupervisorDecision,
   type TelemetryEntry,
+  type ToolOutput,
 } from '../schemas.js';
-import { withJsonSchema, parseModelJson, createModel } from '../llm/index.js';
+import { withJsonSchema, parseModelJson, createModel, type LlmRequestOptions } from '../llm/index.js';
+import { estimateCostUsd } from '../llm/pricing.js';
 import * as brain from '../companyBrain.js';
 import { record } from '../ledger.js';
 import * as supervisor from './supervisor.js';
@@ -37,10 +41,22 @@ const POLICY_SCHEMA = `{
   "escalate_to_human": false
 }`;
 
+/** Generate via the configured model and charge the estimated cost to the venture. */
+async function chargedGenerate(
+  companyId: string,
+  system: string,
+  prompt: string,
+  options: LlmRequestOptions,
+): Promise<string> {
+  const model = await createModel();
+  const { text, usage } = await model.generate(system, prompt, options);
+  brain.addConsumedCost(companyId, estimateCostUsd(model, usage, text));
+  return text;
+}
+
 // ── Layer 2: Policy ───────────────────────────────────────────────────────────
 
 async function policyCheck(task: OperatorTask, budgetRemaining: number): Promise<PolicyDecision> {
-  const model = await createModel();
   const system = withJsonSchema(
     `You are a Policy-Layer agent. Evaluate the task against company constraints.
 Rules:
@@ -51,7 +67,7 @@ Rules:
 - Remaining token budget: $${budgetRemaining.toFixed(2)} USD`,
     POLICY_SCHEMA,
   );
-  const { text: raw } = await model.generate(system, `Evaluate this task:\n${task.description}`, {
+  const raw = await chargedGenerate(task.company_id, system, `Evaluate this task:\n${task.description}`, {
     jsonMode: true,
     maxTokens: 512,
     fixtureKey: `${task.role}:policy`,
@@ -59,9 +75,82 @@ Rules:
   return PolicyDecisionSchema.parse(parseModelJson(raw));
 }
 
+type Telem = (layer: string, data: Record<string, unknown>, success: boolean, error?: string) => void;
+
+interface PolicyOutcome {
+  /** The task to execute (possibly mitigated). */
+  task: OperatorTask;
+  /** When set, the task is finished — return it without executing the tool. */
+  terminal?: OperatorTask;
+}
+
+/**
+ * Run the full L2 gate: policy check, supervisor escalation, and verdict.
+ * Fail-closed: a policy error escalates to the supervisor; if the supervisor
+ * also fails, the task is blocked — it never proceeds to tool execution ungated.
+ */
+async function applyPolicy(task: OperatorTask, ctx: Record<string, unknown>, telem: Telem): Promise<PolicyOutcome> {
+  const budgetCtx = {
+    token_budget_usd: Number(ctx['token_budget_usd'] ?? 50),
+    tokens_consumed_usd: Number(ctx['tokens_consumed_usd'] ?? 0),
+  };
+  const remaining = budgetCtx.token_budget_usd - budgetCtx.tokens_consumed_usd;
+
+  let policy: PolicyDecision | null = null;
+  let policyError: string | null = null;
+  try {
+    policy = await policyCheck(task, remaining);
+    telem('policy', policy, policy.allowed, policy.allowed ? undefined : 'policy blocked');
+    console.log(`[Operator:${task.role}] L2-Policy ✓  risk=${policy.risk_tier} allowed=${policy.allowed}`);
+  } catch (err) {
+    policyError = String(err);
+    telem('policy', {}, false, policyError);
+    console.log(`[Operator:${task.role}] L2-Policy ✗  ${policyError} — escalating to Supervisor`);
+  }
+
+  const needsSupervisor = policyError !== null || policy!.escalate_to_human;
+  if (!needsSupervisor) {
+    if (!policy!.allowed) {
+      return { task, terminal: { ...task, status: 'blocked', error: `Policy blocked: ${policy!.reason}` } };
+    }
+    return { task };
+  }
+
+  console.log(`[Operator:${task.role}] ⚡ Escalating to Supervisor`);
+  let decision: SupervisorDecision;
+  try {
+    decision = await supervisor.evaluate(task, budgetCtx);
+  } catch (supErr) {
+    const msg = String(supErr);
+    telem('supervisor', {}, false, msg);
+    console.log(`[Operator:${task.role}] Supervisor ✗  ${msg}`);
+    if (policyError !== null) {
+      // Both gates down — fail closed.
+      return { task, terminal: { ...task, status: 'blocked', error: `Policy check failed (${policyError}); supervisor unavailable: ${msg}` } };
+    }
+    return { task, terminal: { ...task, status: 'failed', error: `Supervisor unavailable: ${msg}` } };
+  }
+  telem('supervisor', { action: decision.action, reason: decision.reason }, decision.action !== 'halt');
+  console.log(`[Operator:${task.role}] Supervisor → ${decision.action}`);
+
+  if (decision.action === 'halt') {
+    return { task, terminal: { ...task, status: 'halted', error: `Supervisor halt: ${decision.reason}` } };
+  }
+  if (decision.action === 'mitigate' && decision.mitigated_task) {
+    // Identity fields are not the LLM's to change.
+    const { task_id: _tid, company_id: _cid, ...mitigation } = decision.mitigated_task;
+    task = { ...task, ...mitigation };
+    console.log(`[Operator:${task.role}] Task mitigated → risk=${task.risk_tier}`);
+  }
+  if (policy && !policy.allowed) {
+    console.log(`[Operator:${task.role}] Policy block overridden by supervisor ${decision.action}`);
+  }
+  return { task };
+}
+
 // ── Layer 3: Tool execution ───────────────────────────────────────────────────
 
-const ROLE_CONTEXT: Record<string, string> = {
+const ROLE_CONTEXT: Record<OperatorTask['role'], string> = {
   product: 'You are the Product-Agent. Produce product specs, user stories, and go-to-market copy.',
   engineering: 'You are the Engineering-Agent. Write code, API schemas, database queries, and technical specs.',
   'customer-success': 'You are the Customer-Success-Agent. Write onboarding flows, email sequences, and support playbooks.',
@@ -71,11 +160,10 @@ async function executeTool(
   task: OperatorTask,
   skills: string,
   context: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const model = await createModel();
+): Promise<ToolOutput> {
   const mission = typeof context['mission'] === 'string' ? context['mission'] : '';
   const system = withJsonSchema(
-    `${ROLE_CONTEXT[task.role] ?? 'You are an Operator-Agent.'}
+    `${ROLE_CONTEXT[task.role]}
 
 Company mission: ${mission}
 
@@ -83,31 +171,27 @@ Company skills:
 ${skills.slice(0, 2000)}`,
     EXECUTE_SCHEMA,
   );
-  const { text: raw } = await model.generate(system, `Execute this task:\n\n${task.description}`, {
+  const raw = await chargedGenerate(task.company_id, system, `Execute this task:\n\n${task.description}`, {
     jsonMode: true,
     maxTokens: 2048,
     fixtureKey: `${task.role}:tool`,
   });
-  return parseModelJson(raw) as Record<string, unknown>;
+  return ToolOutputSchema.parse(parseModelJson(raw));
 }
 
 // ── Layer 4: Quality gate ─────────────────────────────────────────────────────
 
-function qualityGate(toolOutput: Record<string, unknown>): QualityGateResult {
+function qualityGate(toolOutput: ToolOutput): QualityGateResult {
   const issues: string[] = [];
-  const deliverable = String(toolOutput['deliverable'] ?? '');
-  const confidence = Number(toolOutput['confidence'] ?? 0);
 
-  if (deliverable.length < 20) issues.push('Deliverable is empty or too short');
-  if (confidence < 0.3) issues.push(`Low confidence score: ${confidence.toFixed(2)}`);
-  if (!Array.isArray(toolOutput['artifacts']) || (toolOutput['artifacts'] as unknown[]).length === 0) {
-    issues.push('No artifacts listed');
-  }
+  if (toolOutput.deliverable.length < 20) issues.push('Deliverable is empty or too short');
+  if (toolOutput.confidence < 0.3) issues.push(`Low confidence score: ${toolOutput.confidence.toFixed(2)}`);
+  if (toolOutput.artifacts.length === 0) issues.push('No artifacts listed');
 
   return QualityGateResultSchema.parse({
     passed: issues.length === 0,
     issues,
-    validated_output: issues.length === 0 ? deliverable : null,
+    validated_output: issues.length === 0 ? toolOutput.deliverable : null,
   });
 }
 
@@ -116,7 +200,7 @@ function qualityGate(toolOutput: Record<string, unknown>): QualityGateResult {
 export async function run(task: OperatorTask): Promise<OperatorTask> {
   const stack: TelemetryEntry[] = [];
 
-  const telem = (layer: string, data: Record<string, unknown>, success: boolean, error?: string) => {
+  const telem: Telem = (layer, data, success, error?) => {
     const entry = TelemetryEntrySchema.parse({
       company_id: task.company_id,
       task_id: task.task_id,
@@ -140,59 +224,17 @@ export async function run(task: OperatorTask): Promise<OperatorTask> {
 
   // ── L2: Policy ───────────────────────────────────────────────────────────
   const ctx = brain.readContextFramework(task.company_id);
-  const budget = Number(ctx['token_budget_usd'] ?? 50) - Number(ctx['tokens_consumed_usd'] ?? 0);
-  let policy: PolicyDecision;
-  try {
-    policy = await policyCheck(task, budget);
-    telem('policy', policy, policy.allowed, policy.allowed ? undefined : 'policy blocked');
-    console.log(`[Operator:${task.role}] L2-Policy ✓  risk=${policy.risk_tier} allowed=${policy.allowed}`);
-
-    if (policy.escalate_to_human) {
-      console.log(`[Operator:${task.role}] ⚡ Escalating to Supervisor (risk=${policy.risk_tier})`);
-      const budgetCtx = {
-        token_budget_usd: Number(ctx['token_budget_usd'] ?? 50),
-        tokens_consumed_usd: Number(ctx['tokens_consumed_usd'] ?? 0),
-      };
-      let decision: import('../schemas.js').SupervisorDecision;
-      try {
-        decision = await supervisor.evaluate(task, budgetCtx);
-      } catch (supErr) {
-        const msg = String(supErr);
-        telem('supervisor', {}, false, msg);
-        console.log(`[Operator:${task.role}] Supervisor ✗  ${msg}`);
-        return { ...task, status: 'failed', error: `Supervisor unavailable: ${msg}` };
-      }
-      telem('supervisor', { action: decision.action, reason: decision.reason }, decision.action !== 'halt');
-      console.log(`[Operator:${task.role}] Supervisor → ${decision.action}`);
-
-      if (decision.action === 'halt') {
-        return { ...task, status: 'halted', error: `Supervisor halt: ${decision.reason}` };
-      }
-      if (decision.action === 'mitigate' && decision.mitigated_task) {
-        task = { ...task, ...decision.mitigated_task };
-        console.log(`[Operator:${task.role}] Task mitigated → risk=${task.risk_tier}`);
-      }
-      // Supervisor pass or mitigate overrides a policy block — continue to tool execution
-      if (!policy.allowed) {
-        console.log(`[Operator:${task.role}] Policy block overridden by supervisor ${decision.action}`);
-      }
-    } else if (!policy.allowed) {
-      return { ...task, status: 'blocked', error: `Policy blocked: ${policy.reason}` };
-    }
-  } catch (err) {
-    const msg = String(err);
-    telem('policy', {}, false, msg);
-    console.log(`[Operator:${task.role}] L2-Policy ✗  ${msg}`);
-    // policyCheck itself failed — non-fatal, continue
-  }
+  const policyOutcome = await applyPolicy(task, ctx, telem);
+  if (policyOutcome.terminal) return policyOutcome.terminal;
+  task = policyOutcome.task;
 
   // ── L3: Tool ─────────────────────────────────────────────────────────────
   const skills = brain.readSkills(task.company_id);
-  let toolOutput: Record<string, unknown>;
+  let toolOutput: ToolOutput;
   try {
     toolOutput = await executeTool(task, skills, ctx);
-    telem('tool', toolOutput, Boolean(toolOutput['deliverable']));
-    console.log(`[Operator:${task.role}] L3-Tool    ✓  confidence=${Number(toolOutput['confidence'] ?? 0).toFixed(2)}`);
+    telem('tool', { ...toolOutput }, true);
+    console.log(`[Operator:${task.role}] L3-Tool    ✓  confidence=${toolOutput.confidence.toFixed(2)}`);
   } catch (err) {
     const msg = String(err);
     telem('tool', {}, false, msg);
@@ -217,9 +259,9 @@ export async function run(task: OperatorTask): Promise<OperatorTask> {
   const completed: OperatorTask = { ...task, status: 'completed', result: qg.validated_output };
   telem('learning', {
     layers_executed: 5,
-    confidence: toolOutput['confidence'],
-    artifacts: toolOutput['artifacts'],
-    next_actions: toolOutput['next_actions'],
+    confidence: toolOutput.confidence,
+    artifacts: toolOutput.artifacts,
+    next_actions: toolOutput.next_actions,
   }, true);
 
   brain.appendTaskLog(task.company_id, task.task_id, {

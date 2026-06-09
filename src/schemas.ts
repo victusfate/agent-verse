@@ -1,5 +1,19 @@
 import { z } from 'zod';
 
+// ── Operator task ─────────────────────────────────────────────────────────────
+
+export const OperatorTaskSchema = z.object({
+  task_id: z.string().default(() => crypto.randomUUID()),
+  company_id: z.string(),
+  role: z.enum(['product', 'engineering', 'customer-success']),
+  description: z.string(),
+  risk_tier: z.enum(['low', 'medium', 'high', 'critical']).default('low'),
+  status: z.enum(['pending', 'in_progress', 'completed', 'failed', 'blocked', 'halted']).default('pending'),
+  result: z.string().nullable().default(null),
+  error: z.string().nullable().default(null),
+});
+export type OperatorTask = z.infer<typeof OperatorTaskSchema>;
+
 // ── Supervisor decision (Supervisor-Agent output) ─────────────────────────────
 
 export const SupervisorDecisionSchema = z.object({
@@ -7,16 +21,7 @@ export const SupervisorDecisionSchema = z.object({
   action: z.enum(['mitigate', 'pass', 'halt']),
   reason: z.string(),
   estimated_cost_usd: z.number(),
-  mitigated_task: z.object({
-    task_id: z.string(),
-    company_id: z.string(),
-    role: z.enum(['product', 'engineering', 'customer-success']),
-    description: z.string(),
-    risk_tier: z.enum(['low', 'medium', 'high', 'critical']),
-    status: z.enum(['pending', 'in_progress', 'completed', 'failed', 'blocked', 'halted']),
-    result: z.string().nullable(),
-    error: z.string().nullable(),
-  }).optional(),
+  mitigated_task: OperatorTaskSchema.optional(),
 });
 export type SupervisorDecision = z.infer<typeof SupervisorDecisionSchema>;
 
@@ -41,19 +46,15 @@ export const VenturePayloadSchema = z.object({
 });
 export type VenturePayload = z.infer<typeof VenturePayloadSchema>;
 
-// ── Operator task ─────────────────────────────────────────────────────────────
+// ── Tool output (Layer 3) ─────────────────────────────────────────────────────
 
-export const OperatorTaskSchema = z.object({
-  task_id: z.string().default(() => crypto.randomUUID()),
-  company_id: z.string(),
-  role: z.enum(['product', 'engineering', 'customer-success']),
-  description: z.string(),
-  risk_tier: z.enum(['low', 'medium', 'high', 'critical']).default('low'),
-  status: z.enum(['pending', 'in_progress', 'completed', 'failed', 'blocked', 'halted']).default('pending'),
-  result: z.string().nullable().default(null),
-  error: z.string().nullable().default(null),
+export const ToolOutputSchema = z.object({
+  deliverable: z.string(),
+  artifacts: z.array(z.string()),
+  confidence: z.number(),
+  next_actions: z.array(z.string()),
 });
-export type OperatorTask = z.infer<typeof OperatorTaskSchema>;
+export type ToolOutput = z.infer<typeof ToolOutputSchema>;
 
 // ── Policy decision (Layer 2) ─────────────────────────────────────────────────
 
