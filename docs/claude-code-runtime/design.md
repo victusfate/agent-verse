@@ -17,6 +17,7 @@ ledger, and company brain are preserved unchanged.
 | **Company dir** | `companies/<company_id>/` — the brain directory. Under the `sdk` runtime it is also each agent session's `cwd`, making file state the inter-agent communication surface. |
 | **Auto-fallback** | Runtime selection rule at startup: explicit flag/env wins; otherwise if `ANTHROPIC_API_KEY` is absent and the `claude` binary is on `PATH`, select the `sdk` runtime. |
 | **Actual cost** | `total_cost_usd` reported by the SDK result message. Preferred over the `pricing.ts` token-based estimate when present. |
+| **L2 gate** | The existing Layer-2 risk step of the operator's 5-layer loop (`src/agents/operator.ts`): policy check plus supervisor escalation. Under the `sdk` runtime it is realized as the tool gate. |
 
 ## Decisions
 
@@ -35,6 +36,24 @@ sub-agent/tool/permission control and structured cost reporting; the existing
 sub-agents (`options.agents`) — discards the working state machine and test
 suite for no behavioral gain; explicitly rejected since the state machine is a
 keep requirement.
+
+**Contract additions (explicit types):**
+
+```typescript
+// src/llm/index.ts — extensions, both optional so api providers are untouched
+interface SessionContext {
+  cwd: string;
+  allowedTools: string[];
+  maxTurns: number;
+  maxBudgetUsd?: number;
+  canUseTool?: CanUseTool;        // SDK callback type; wired by operator turns
+}
+interface LlmRequestOptions { /* existing fields */ session?: SessionContext; }
+interface GenerateResult     { /* existing fields */ costUsd?: number; }
+```
+
+`session` is meaningful only to `SdkModel`; other providers ignore it (same
+pattern as the existing `fixtureKey`).
 
 ### Both runtimes coexist
 **Decision:** Keep `src/llm/` providers as-is. Add provider type `'sdk'` to
