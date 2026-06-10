@@ -4,11 +4,13 @@
  */
 import { parseArgs } from 'node:util';
 import { VenturePayloadSchema, type VenturePayload } from './schemas.js';
+import { parseRuntime, type AgentRuntime } from './llm/runtime.js';
 
 export interface CliArgs {
   seed?: string;
   model?: string;
   provider?: string;
+  runtime?: AgentRuntime;
   venture: VenturePayload | null;
   maxCycles?: number;
 }
@@ -21,6 +23,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
       venture:      { type: 'string' },
       model:        { type: 'string' },
       provider:     { type: 'string' },
+      runtime:      { type: 'string' },
       'max-cycles': { type: 'string' },
     },
     allowPositionals: false,
@@ -42,6 +45,9 @@ export function parseCliArgs(argv: string[]): CliArgs {
     venture = result.data;
   }
 
+  const runtime: AgentRuntime | undefined =
+    values.runtime !== undefined ? parseRuntime(values.runtime, '--runtime') : undefined;
+
   let maxCycles: number | undefined;
   if (values['max-cycles'] !== undefined) {
     const n = Number(values['max-cycles']);
@@ -55,6 +61,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
     ...(values.seed !== undefined ? { seed: values.seed } : {}),
     ...(values.model !== undefined ? { model: values.model } : {}),
     ...(values.provider !== undefined ? { provider: values.provider } : {}),
+    ...(runtime !== undefined ? { runtime } : {}),
     venture,
     ...(maxCycles !== undefined ? { maxCycles } : {}),
   };

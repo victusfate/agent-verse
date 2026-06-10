@@ -7,6 +7,8 @@ import { BrainInitSchema, OperatorTaskSchema, type OperatorTask, type VenturePay
 import { withJsonSchema, parseModelJson, createModel } from '../llm/index.js';
 import * as brain from '../companyBrain.js';
 import { record } from '../ledger.js';
+import { resolveCompaniesDir } from '../paths.js';
+import { readMostlySession } from './agentSession.js';
 
 const SYSTEM_PROMPT = `You are the CEO-Agent of an autonomous corporate AI ecosystem.
 
@@ -41,7 +43,12 @@ export async function run(venture: VenturePayload): Promise<[string, OperatorTas
   const { text: raw } = await model.generate(
     withJsonSchema(SYSTEM_PROMPT, SCHEMA_HINT),
     `Initialise company for this venture:\n\n${JSON.stringify(venture, null, 2)}`,
-    { jsonMode: true, maxTokens: 2048, fixtureKey: 'ceo:init' },
+    {
+      jsonMode: true,
+      maxTokens: 2048,
+      fixtureKey: 'ceo:init',
+      ...readMostlySession(model, resolveCompaniesDir(), ['Read', 'Write', 'Glob']),
+    },
   );
 
   const init = BrainInitSchema.parse(parseModelJson(raw));

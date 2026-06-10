@@ -12,6 +12,9 @@ const RATES: Record<LlmProviderType, { input: number; output: number }> = {
   local: { input: 0, output: 0 },
   cli: { input: 0, output: 0 },
   simulated: { input: 0, output: 0 },
+  // sdk sessions report actual cost; this estimate is the fallback only.
+  // Claude rates (matches anthropic — the sdk runtime is Claude-only).
+  sdk: { input: 3, output: 15 },
 };
 
 export function estimateCostUsd(

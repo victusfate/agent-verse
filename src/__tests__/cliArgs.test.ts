@@ -21,6 +21,16 @@ describe('parseCliArgs', () => {
     expect(() => parseCliArgs(['--bogus', 'x'])).toThrow();
   });
 
+  it('parses --runtime sdk and api', () => {
+    expect(parseCliArgs(['--runtime', 'sdk']).runtime).toBe('sdk');
+    expect(parseCliArgs(['--runtime', 'api']).runtime).toBe('api');
+    expect(parseCliArgs([]).runtime).toBeUndefined();
+  });
+
+  it('rejects an invalid --runtime value at the boundary', () => {
+    expect(() => parseCliArgs(['--runtime', 'cloud'])).toThrow(/--runtime.*'cloud'/);
+  });
+
   it('rejects --seed without a value instead of treating it as boolean true', () => {
     expect(() => parseCliArgs(['--seed'])).toThrow();
   });

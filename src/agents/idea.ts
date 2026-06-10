@@ -4,6 +4,8 @@
  */
 import { VenturePayloadSchema, type VenturePayload } from '../schemas.js';
 import { withJsonSchema, parseModelJson, createModel } from '../llm/index.js';
+import { resolveCompaniesDir } from '../paths.js';
+import { readMostlySession } from './agentSession.js';
 
 const SYSTEM_PROMPT = `You are an Idea-Agent in an autonomous corporate AI ecosystem.
 
@@ -35,7 +37,12 @@ export async function run(seedPrompt?: string): Promise<VenturePayload> {
   const { text: raw } = await model.generate(
     withJsonSchema(SYSTEM_PROMPT, SCHEMA_HINT),
     userPrompt,
-    { jsonMode: true, temperature: 0.7, fixtureKey: 'idea:generate' },
+    {
+      jsonMode: true,
+      temperature: 0.7,
+      fixtureKey: 'idea:generate',
+      ...readMostlySession(model, resolveCompaniesDir(), ['Read', 'Glob', 'Grep']),
+    },
   );
 
   const payload = VenturePayloadSchema.parse(parseModelJson(raw));

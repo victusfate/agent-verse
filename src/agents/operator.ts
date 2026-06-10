@@ -19,11 +19,15 @@ import {
   type TelemetryEntry,
   type ToolOutput,
 } from '../schemas.js';
-import { withJsonSchema, parseModelJson, createModel, type LlmRequestOptions } from '../llm/index.js';
+import path from 'node:path';
+import { withJsonSchema, parseModelJson, createModel, type LlmRequestOptions, type SessionContext } from '../llm/index.js';
 import { estimateCostUsd } from '../llm/pricing.js';
+import { SdkSessionError } from '../llm/sdk.js';
+import { resolveCompaniesDir } from '../paths.js';
 import * as brain from '../companyBrain.js';
 import { record } from '../ledger.js';
 import * as supervisor from './supervisor.js';
+import { createToolGate } from './toolGate.js';
 
 // ── Schema hints embedded in prompts ─────────────────────────────────────────
 
@@ -49,9 +53,34 @@ async function chargedGenerate(
   options: LlmRequestOptions,
 ): Promise<string> {
   const model = await createModel();
-  const { text, usage } = await model.generate(system, prompt, options);
-  brain.addConsumedCost(companyId, estimateCostUsd(model, usage, text));
+  const { text, usage, costUsd } = await model.generate(system, prompt, options);
+  // Actual session cost (sdk runtime) beats the token-based estimate.
+  brain.addConsumedCost(companyId, costUsd ?? estimateCostUsd(model, usage, text));
   return text;
+}
+
+const OPERATOR_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'];
+const OPERATOR_MAX_TURNS = 10;
+
+/** Read the venture budget out of a context framework, with safe defaults. */
+function budgetFrom(ctx: Record<string, unknown>): { token_budget_usd: number; tokens_consumed_usd: number } {
+  return {
+    token_budget_usd: Number(ctx['token_budget_usd'] ?? 50),
+    tokens_consumed_usd: Number(ctx['tokens_consumed_usd'] ?? 0),
+  };
+}
+
+/** Session scope for an sdk-runtime operator turn: company dir + tool gate. */
+function operatorSession(task: OperatorTask, ctx: Record<string, unknown>): SessionContext {
+  const companyDir = path.join(resolveCompaniesDir(), task.company_id);
+  const budget = budgetFrom(ctx);
+  return {
+    cwd: companyDir,
+    allowedTools: OPERATOR_TOOLS,
+    maxTurns: OPERATOR_MAX_TURNS,
+    maxBudgetUsd: budget.token_budget_usd - budget.tokens_consumed_usd,
+    canUseTool: createToolGate({ task, budget, companyDir }),
+  };
 }
 
 // ── Layer 2: Policy ───────────────────────────────────────────────────────────
@@ -90,10 +119,7 @@ interface PolicyOutcome {
  * also fails, the task is blocked — it never proceeds to tool execution ungated.
  */
 async function applyPolicy(task: OperatorTask, ctx: Record<string, unknown>, telem: Telem): Promise<PolicyOutcome> {
-  const budgetCtx = {
-    token_budget_usd: Number(ctx['token_budget_usd'] ?? 50),
-    tokens_consumed_usd: Number(ctx['tokens_consumed_usd'] ?? 0),
-  };
+  const budgetCtx = budgetFrom(ctx);
   const remaining = budgetCtx.token_budget_usd - budgetCtx.tokens_consumed_usd;
 
   let policy: PolicyDecision | null = null;
@@ -160,6 +186,7 @@ async function executeTool(
   task: OperatorTask,
   skills: string,
   context: Record<string, unknown>,
+  session?: SessionContext,
 ): Promise<ToolOutput> {
   const mission = typeof context['mission'] === 'string' ? context['mission'] : '';
   const system = withJsonSchema(
@@ -175,6 +202,7 @@ ${skills.slice(0, 2000)}`,
     jsonMode: true,
     maxTokens: 2048,
     fixtureKey: `${task.role}:tool`,
+    ...(session !== undefined ? { session } : {}),
   });
   return ToolOutputSchema.parse(parseModelJson(raw));
 }
@@ -224,15 +252,22 @@ export async function run(task: OperatorTask): Promise<OperatorTask> {
 
   // ── L2: Policy ───────────────────────────────────────────────────────────
   const ctx = brain.readContextFramework(task.company_id);
-  const policyOutcome = await applyPolicy(task, ctx, telem);
-  if (policyOutcome.terminal) return policyOutcome.terminal;
-  task = policyOutcome.task;
+  const isSdk = (await createModel()).provider === 'sdk';
+  if (isSdk) {
+    // The tool gate enforces L2 live per tool call — the advisory prompt is subsumed.
+    telem('policy', { delegated_to: 'tool_gate' }, true);
+    console.log(`[Operator:${task.role}] L2-Policy ✓  delegated to tool gate (sdk runtime)`);
+  } else {
+    const policyOutcome = await applyPolicy(task, ctx, telem);
+    if (policyOutcome.terminal) return policyOutcome.terminal;
+    task = policyOutcome.task;
+  }
 
   // ── L3: Tool ─────────────────────────────────────────────────────────────
   const skills = brain.readSkills(task.company_id);
   let toolOutput: ToolOutput;
   try {
-    toolOutput = await executeTool(task, skills, ctx);
+    toolOutput = await executeTool(task, skills, ctx, isSdk ? operatorSession(task, ctx) : undefined);
     telem('tool', { ...toolOutput }, true);
     console.log(`[Operator:${task.role}] L3-Tool    ✓  confidence=${toolOutput.confidence.toFixed(2)}`);
   } catch (err) {
@@ -240,6 +275,12 @@ export async function run(task: OperatorTask): Promise<OperatorTask> {
     telem('tool', {}, false, msg);
     telem('learning', { failed: true }, false, msg);
     console.log(`[Operator:${task.role}] L3-Tool    ✗  ${msg}`);
+    if (err instanceof SdkSessionError) {
+      // A failed session still spent real money — charge it.
+      brain.addConsumedCost(task.company_id, err.costUsd);
+      const status = err.subtype === 'error_max_budget_usd' ? 'blocked' : 'failed';
+      return { ...task, status, error: err.message };
+    }
     return { ...task, status: 'failed', error: `Tool execution failed: ${msg}` };
   }
 

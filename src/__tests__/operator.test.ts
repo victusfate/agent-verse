@@ -296,3 +296,75 @@ describe('operator.run — typed tool output (F-22)', () => {
     expect(result.error?.toLowerCase()).toContain('tool execution failed');
   });
 });
+
+// ── claude-code-runtime slice 6: sdk runtime ─────────────────────────────────
+
+function sdkStub(responses: Array<{ text: string; costUsd?: number } | Error>): Model {
+  let call = 0;
+  return {
+    id: 'claude-sonnet-4-6',
+    provider: 'sdk',
+    generate: vi.fn(async () => {
+      const next = responses[call++ % responses.length]!;
+      if (next instanceof Error) throw next;
+      return next;
+    }),
+  };
+}
+
+describe('operator.run — sdk runtime (claude-code-runtime)', () => {
+  it('skips the policy prompt and passes the operator session context to generate', async () => {
+    const { createModel } = await import('../llm/index.js');
+    const model = sdkStub([{ text: JSON.stringify(VALID_TOOL), costUsd: 0.31 }]);
+    vi.mocked(createModel).mockResolvedValue(model);
+
+    const { run } = await import('../agents/operator.js');
+    const result = await run(makeTask());
+
+    expect(result.status).toBe('completed');
+    // One generate call only — the prompt-based policy check is subsumed by the gate
+    expect(vi.mocked(model.generate)).toHaveBeenCalledTimes(1);
+
+    const [, , options] = vi.mocked(model.generate).mock.calls[0]!;
+    expect(options?.session).toBeDefined();
+    expect(options?.session?.cwd.endsWith('test-co')).toBe(true);
+    expect(options?.session?.allowedTools).toEqual(
+      expect.arrayContaining(['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep']),
+    );
+    expect(options?.session?.maxTurns).toBe(10);
+    expect(options?.session?.maxBudgetUsd).toBe(50);
+    expect(typeof options?.session?.canUseTool).toBe('function');
+  });
+
+  it('charges the actual session cost to the venture instead of an estimate', async () => {
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(sdkStub([{ text: JSON.stringify(VALID_TOOL), costUsd: 0.77 }]));
+
+    const { run } = await import('../agents/operator.js');
+    await run(makeTask());
+
+    const brain = await import('../companyBrain.js');
+    const ctx = brain.readContextFramework('test-co');
+    expect(ctx['tokens_consumed_usd']).toBeCloseTo(0.77, 6);
+  });
+
+  it('maps a budget-exhausted session to blocked and a turns-exhausted session to failed', async () => {
+    const { createModel } = await import('../llm/index.js');
+    const { SdkSessionError } = await import('../llm/sdk.js');
+
+    vi.mocked(createModel).mockResolvedValue(
+      sdkStub([new SdkSessionError('error_max_budget_usd', 5.01, ['budget exceeded'])]),
+    );
+    const { run } = await import('../agents/operator.js');
+    const blocked = await run(makeTask());
+    expect(blocked.status).toBe('blocked');
+    expect(blocked.error).toContain('budget');
+
+    vi.mocked(createModel).mockResolvedValue(
+      sdkStub([new SdkSessionError('error_max_turns', 0.4, [])]),
+    );
+    const failed = await run(makeTask());
+    expect(failed.status).toBe('failed');
+    expect(failed.error).toContain('turns');
+  });
+});
