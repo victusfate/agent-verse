@@ -12,6 +12,7 @@
  */
 import path from 'node:path';
 import { detectProvider, type LlmProviderType } from './llm/index.js';
+import { resolveRuntime, assertSdkModel, claudeBinaryOnPath } from './llm/runtime.js';
 import { runGraph } from './graph.js';
 import { defaultDbPath } from './ledger.js';
 import { resolveCompaniesDir } from './paths.js';
@@ -41,10 +42,24 @@ async function main(): Promise<void> {
   if (args.model)    process.env['AGENT_MODEL']    = args.model;
   if (args.provider) process.env['AGENT_PROVIDER'] = args.provider;
 
-  const modelId  = process.env['AGENT_MODEL']    ?? 'claude-sonnet-4-6';
-  const provider = (process.env['AGENT_PROVIDER'] as LlmProviderType | undefined) ?? detectProvider(modelId);
+  const modelId = process.env['AGENT_MODEL'] ?? 'claude-sonnet-4-6';
+  const runtime = resolveRuntime(args.runtime !== undefined ? { flag: args.runtime } : {});
 
-  checkCredentials(modelId, provider);
+  if (runtime === 'sdk') {
+    assertSdkModel(modelId);
+    if (!claudeBinaryOnPath()) {
+      console.error(`ERROR: --runtime sdk requires the 'claude' binary on PATH.`);
+      console.error(`       Install Claude Code: https://code.claude.com/docs`);
+      process.exit(1);
+    }
+    // Route every agent's createModel() through the SDK provider.
+    process.env['AGENT_PROVIDER'] = 'sdk';
+    console.log(`[startup] Runtime: sdk (local Claude Code) | Model: ${modelId}`);
+  } else {
+    const provider = (process.env['AGENT_PROVIDER'] as LlmProviderType | undefined) ?? detectProvider(modelId);
+    console.log(`[startup] Runtime: api`);
+    checkCredentials(modelId, provider);
+  }
 
   console.log('='.repeat(60));
   console.log('  AGENT-VERSE  |  Autonomous Corporate AI Ecosystem');
