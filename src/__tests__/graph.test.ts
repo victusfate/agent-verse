@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import type { VenturePayload, OperatorTask, MonitorReport } from '../schemas.js';
+import { makeTask as sharedMakeTask } from './helpers.js';
 
 vi.mock('../agents/idea.js', () => ({ run: vi.fn() }));
 vi.mock('../agents/ceo.js', () => ({ run: vi.fn() }));
@@ -21,17 +22,7 @@ const VENTURE: VenturePayload = {
 };
 
 function makeTask(overrides: Partial<OperatorTask> = {}): OperatorTask {
-  return {
-    task_id: crypto.randomUUID(),
-    company_id: 'co-123',
-    role: 'engineering',
-    description: 'Build something',
-    risk_tier: 'low',
-    status: 'completed',
-    result: 'done',
-    error: null,
-    ...overrides,
-  };
+  return sharedMakeTask({ company_id: 'co-123', description: 'Build something', status: 'completed', result: 'done', ...overrides });
 }
 
 const TASKS: OperatorTask[] = [
@@ -55,17 +46,15 @@ const CONTINUE_REPORT: MonitorReport = { ...DONE_REPORT, iteration_complete: fal
 // ── Setup: temp dir for companyBrain ─────────────────────────────────────────
 
 let tmpRoot: string;
-let originalCwd: string;
 
 beforeEach(() => {
-  originalCwd = process.cwd();
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'av-graph-'));
-  process.chdir(tmpRoot);
+  process.env['COMPANIES_DIR'] = path.join(tmpRoot, 'companies');
   vi.clearAllMocks();
 });
 
 afterEach(() => {
-  process.chdir(originalCwd);
+  delete process.env['COMPANIES_DIR'];
   fs.rmSync(tmpRoot, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
@@ -123,11 +112,11 @@ describe('runGraph — orchestration (slice 8)', () => {
     expect(vi.mocked(monRun)).toHaveBeenCalledTimes(1);
   });
 
-  it('loop caps at MAX_MONITOR_CYCLES when monitor never completes', async () => {
+  it('loop caps at DEFAULT_MAX_CYCLES when monitor never completes', async () => {
     const { run: ceoRun } = await import('../agents/ceo.js');
     const { run: opRun } = await import('../agents/operator.js');
     const { run: monRun } = await import('../agents/monitor.js');
-    const { MAX_MONITOR_CYCLES, runGraph } = await import('../graph.js');
+    const { DEFAULT_MAX_CYCLES, runGraph } = await import('../graph.js');
 
     vi.mocked(ceoRun).mockResolvedValue(['co-123', TASKS]);
     vi.mocked(opRun).mockImplementation(async t => t);
@@ -135,7 +124,53 @@ describe('runGraph — orchestration (slice 8)', () => {
 
     const state = await runGraph({ venturePayload: VENTURE });
 
-    expect(state.cycle).toBe(MAX_MONITOR_CYCLES);
-    expect(vi.mocked(monRun)).toHaveBeenCalledTimes(MAX_MONITOR_CYCLES);
+    expect(state.cycle).toBe(DEFAULT_MAX_CYCLES);
+    expect(vi.mocked(monRun)).toHaveBeenCalledTimes(DEFAULT_MAX_CYCLES);
+  });
+});
+
+// ── Quality rework slice 5: loop semantics ────────────────────────────────────
+
+describe('runGraph — maxCycles parameter (F-01)', () => {
+  it('caps the loop at the maxCycles passed in the initial state', async () => {
+    const { run: ceoRun } = await import('../agents/ceo.js');
+    const { run: opRun } = await import('../agents/operator.js');
+    const { run: monRun } = await import('../agents/monitor.js');
+
+    vi.mocked(ceoRun).mockResolvedValue(['co-123', TASKS]);
+    vi.mocked(opRun).mockImplementation(async t => t);
+    vi.mocked(monRun).mockResolvedValue(CONTINUE_REPORT);
+
+    const { runGraph } = await import('../graph.js');
+    const state = await runGraph({ venturePayload: VENTURE, maxCycles: 1 });
+
+    expect(state.cycle).toBe(1);
+    expect(vi.mocked(monRun)).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runGraph — completed and halted tasks are not re-run (F-07)', () => {
+  it('only passes runnable tasks to the operator and preserves the rest', async () => {
+    const tasks = [
+      makeTask({ role: 'product', status: 'completed' }),
+      makeTask({ role: 'engineering', status: 'halted', error: 'Supervisor halt' }),
+      makeTask({ role: 'customer-success', status: 'pending', result: null }),
+    ];
+    const { run: ceoRun } = await import('../agents/ceo.js');
+    const { run: opRun } = await import('../agents/operator.js');
+    const { run: monRun } = await import('../agents/monitor.js');
+
+    vi.mocked(ceoRun).mockResolvedValue(['co-123', tasks]);
+    vi.mocked(opRun).mockImplementation(async t => ({ ...t, status: 'completed' as const }));
+    vi.mocked(monRun).mockResolvedValue(DONE_REPORT);
+
+    const { runGraph } = await import('../graph.js');
+    const state = await runGraph({ venturePayload: VENTURE });
+
+    expect(vi.mocked(opRun)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(opRun)).toHaveBeenCalledWith(expect.objectContaining({ role: 'customer-success' }));
+    expect(state.operatorTasks.find(t => t.role === 'engineering')!.status).toBe('halted');
+    expect(state.operatorTasks.find(t => t.role === 'customer-success')!.status).toBe('completed');
+    expect(state.operatorTasks).toHaveLength(3);
   });
 });

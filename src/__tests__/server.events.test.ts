@@ -5,31 +5,17 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer } from '../server/index.js';
+import { initDb } from '../ledger.js';
+import { get } from './helpers.js';
 
 function seedDb(dbPath: string, company_id: string) {
   const db = new DatabaseSync(dbPath);
-  db.exec(`CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL,
-    company_id TEXT NOT NULL, event_type TEXT NOT NULL,
-    agent_type TEXT, payload TEXT NOT NULL
-  )`);
+  initDb(db);
   db.prepare('INSERT INTO events (ts, company_id, event_type, agent_type, payload) VALUES (?,?,?,?,?)')
     .run(new Date().toISOString(), company_id, 'task.started', 'operator.engineering', JSON.stringify({ task_id: 'abc' }));
   db.prepare('INSERT INTO events (ts, company_id, event_type, agent_type, payload) VALUES (?,?,?,?,?)')
     .run(new Date().toISOString(), company_id, 'task.completed', 'operator.engineering', JSON.stringify({ task_id: 'abc' }));
   db.close();
-}
-
-function get(port: number, path: string): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }> {
-  return new Promise((resolve, reject) => {
-    const req = http.request({ port, path, method: 'GET' }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (c: Buffer) => chunks.push(c));
-      res.on('end', () => resolve({ status: res.statusCode!, headers: res.headers, body: Buffer.concat(chunks).toString() }));
-    });
-    req.on('error', reject);
-    req.end();
-  });
 }
 
 let server: http.Server;
@@ -131,5 +117,37 @@ describe('GET /events/stream', () => {
     });
     expect(received.length).toBeGreaterThanOrEqual(2);
     expect(JSON.parse(received[0]!.slice(5))).toHaveProperty('event_type');
+  });
+});
+
+// ── Quality rework slice 6: HTTP hygiene (F-15, F-30) ─────────────────────────
+
+describe('server — HTTP hygiene', () => {
+  it('returns 400 when since is an empty string', async () => {
+    const res = await get(port, '/events?company_id=test-co&since=');
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when since is empty on the stream endpoint', async () => {
+    const res = await get(port, '/events/stream?company_id=test-co&since=');
+    expect(res.status).toBe(400);
+  });
+
+  it('404 responses carry a JSON content-type', async () => {
+    const res = await get(port, '/no-such-route');
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toContain('application/json');
+  });
+
+  it('rejects non-GET methods with 405', async () => {
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = http.request({ port, path: '/events?company_id=test-co', method: 'POST' }, (res) => {
+        res.resume();
+        resolve(res.statusCode!);
+      });
+      req.on('error', reject);
+      req.end();
+    });
+    expect(status).toBe(405);
   });
 });

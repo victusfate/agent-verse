@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { OperatorTask } from '../schemas.js';
+import { makeTask as sharedMakeTask, stubModel } from './helpers.js';
 
 vi.mock('../llm/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../llm/index.js')>();
@@ -12,26 +13,10 @@ vi.mock('../ledger.js', async (importOriginal) => {
 });
 
 function makeTask(overrides: Partial<OperatorTask> = {}): OperatorTask {
-  return {
-    task_id: 'task-001',
-    company_id: 'test-co',
-    role: 'engineering',
-    description: 'Build an API endpoint',
-    risk_tier: 'high',
-    status: 'pending',
-    result: null,
-    error: null,
-    ...overrides,
-  };
+  return sharedMakeTask({ task_id: 'task-001', description: 'Build an API endpoint', risk_tier: 'high', ...overrides });
 }
 
-function makeModel(response: Record<string, unknown>) {
-  return {
-    id: 'stub',
-    provider: 'openai' as const,
-    generate: vi.fn(async () => JSON.stringify(response)),
-  };
-}
+const makeModel = (response: Record<string, unknown>) => stubModel([response]);
 
 const BUDGET_CTX = { token_budget_usd: 50, tokens_consumed_usd: 10 };
 
@@ -128,9 +113,9 @@ describe('supervisor.evaluate — budget hard-halt', () => {
   it('does NOT hard-halt when remaining budget equals exactly MIN_TASK_BUDGET_USD (BUG-4)', async () => {
     const { createModel } = await import('../llm/index.js');
     const mockCreate = vi.mocked(createModel);
-    const mockGenerate = vi.fn(async () => JSON.stringify({
+    const mockGenerate = vi.fn(async () => ({ text: JSON.stringify({
       action: 'pass', reason: 'ok', estimated_cost_usd: 0.01,
-    }));
+    }) }));
     mockCreate.mockResolvedValue({ id: 'stub', provider: 'openai', generate: mockGenerate });
 
     // exactly MIN_TASK_BUDGET_USD ($0.05) remaining (0.05 - 0 = 0.05 exactly) — should NOT hard-halt
@@ -140,5 +125,25 @@ describe('supervisor.evaluate — budget hard-halt', () => {
 
     expect(decision.action).toBe('pass');
     expect(mockGenerate).toHaveBeenCalled();
+  });
+});
+
+// ── Quality rework slice 4: HardHaltSchema conformance (F-24) ─────────────────
+
+describe('supervisor.evaluate — hard-halt event payload', () => {
+  it('records a hard-halt event that conforms to HardHaltSchema', async () => {
+    const { createModel } = await import('../llm/index.js');
+    vi.mocked(createModel).mockResolvedValue(makeModel({}));
+
+    const { record } = await import('../ledger.js');
+    const { HardHaltSchema } = await import('../schemas.js');
+
+    const exhaustedCtx = { token_budget_usd: 10, tokens_consumed_usd: 10 };
+    const { evaluate } = await import('../agents/supervisor.js');
+    await evaluate(makeTask(), exhaustedCtx);
+
+    const call = vi.mocked(record).mock.calls.find(c => c[1] === 'supervisor.hard_halt');
+    expect(call).toBeDefined();
+    expect(() => HardHaltSchema.parse(call![2])).not.toThrow();
   });
 });

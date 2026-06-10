@@ -23,6 +23,24 @@ export interface LlmRequestOptions {
    * Max output tokens to limit response length.
    */
   maxTokens?: number;
+
+  /**
+   * Explicit fixture selector for the simulated provider.
+   * Ignored by real providers.
+   */
+  fixtureKey?: string;
+}
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface GenerateResult {
+  /** The generated response content as a raw string (or JSON string). */
+  text: string;
+  /** Token usage as reported by the provider SDK, when available. */
+  usage?: TokenUsage;
 }
 
 export interface Model {
@@ -43,13 +61,12 @@ export interface Model {
    * @param systemInstruction The framing persona and guiding rules for the LLM.
    * @param prompt The user/operator prompt containing raw tasks or context.
    * @param options Execution configurations (jsonMode, temperature, maxTokens).
-   * @returns The generated response content as a raw string (or JSON string).
    */
   generate(
     systemInstruction: string,
     prompt: string,
     options?: LlmRequestOptions,
-  ): Promise<string>;
+  ): Promise<GenerateResult>;
 }
 
 // ── Provider auto-detection ───────────────────────────────────────────────────
@@ -71,15 +88,31 @@ export function stripProviderPrefix(modelId: string): string {
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
+const modelCache = new Map<string, Model>();
+
 export async function createModel(
   modelId?: string,
   provider?: LlmProviderType,
 ): Promise<Model> {
   const rawId = modelId ?? process.env.AGENT_MODEL ?? 'claude-sonnet-4-6';
-  const resolvedProvider = provider ?? (process.env.AGENT_PROVIDER as LlmProviderType | undefined) ?? detectProvider(rawId);
+  // AGENT_PROVIDER only applies to env-derived model ids — an explicit id wins.
+  const envProvider = modelId === undefined
+    ? (process.env.AGENT_PROVIDER as LlmProviderType | undefined)
+    : undefined;
+  const resolvedProvider = provider ?? envProvider ?? detectProvider(rawId);
   const id = stripProviderPrefix(rawId);
 
-  switch (resolvedProvider) {
+  const cacheKey = `${resolvedProvider}:${id}`;
+  const cached = modelCache.get(cacheKey);
+  if (cached) return cached;
+
+  const model = await instantiate(resolvedProvider, id);
+  modelCache.set(cacheKey, model);
+  return model;
+}
+
+async function instantiate(provider: LlmProviderType, id: string): Promise<Model> {
+  switch (provider) {
     case 'anthropic': {
       const { AnthropicModel } = await import('./anthropic.js');
       return new AnthropicModel(id);
@@ -93,8 +126,12 @@ export async function createModel(
       return new GoogleModel(id);
     }
     case 'local': {
-      const { LocalModel } = await import('./local.js');
-      return new LocalModel(id);
+      const { OpenAIModel } = await import('./openai.js');
+      return new OpenAIModel(id, {
+        baseURL: `${process.env.OLLAMA_API_BASE ?? 'http://localhost:11434'}/v1`,
+        apiKey: 'ollama', // required by SDK but not validated by Ollama
+        provider: 'local',
+      });
     }
     case 'cli': {
       const { CliModel } = await import('./cli.js');
@@ -105,7 +142,7 @@ export async function createModel(
       return new SimulatedModel();
     }
     default:
-      throw new Error(`Unknown provider: ${resolvedProvider as string}`);
+      throw new Error(`Unknown provider: ${provider as string}`);
   }
 }
 
@@ -129,8 +166,10 @@ export function parseModelJson(raw: string): unknown {
   let cleaned = raw.trim();
   // Strip markdown code fences (```json ... ``` or ``` ... ```)
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  // Some models prefill with { and return without the opening brace
-  if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
+  // Anthropic prefill artifact: the assistant was primed with "{" so the text
+  // arrives brace-stripped. Only repair when the tail looks like JSON —
+  // never mangle prose error messages.
+  if (!cleaned.startsWith('{') && !cleaned.startsWith('[') && cleaned.endsWith('}')) {
     cleaned = '{' + cleaned;
   }
   return JSON.parse(cleaned);

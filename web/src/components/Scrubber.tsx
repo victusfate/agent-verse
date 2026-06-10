@@ -32,7 +32,7 @@ export function Scrubber({ total, playhead, onPlay, onPause, onSeek }: Props) {
         data-testid="seek-bar"
         type="range"
         min={0}
-        max={Math.max(0, total - 1)}
+        max={total}
         value={playhead.eventIndex}
         onChange={e => onSeek(Number(e.target.value))}
       />

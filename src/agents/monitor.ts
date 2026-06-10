@@ -56,12 +56,12 @@ export async function run(
   }, null, 2);
 
   const model = await createModel();
-  const raw = await model.generate(
+  const { text: raw } = await model.generate(
     withJsonSchema(SYSTEM_PROMPT, SCHEMA_HINT),
     `Analyse this execution cycle and diagnose any friction:\n\n${analysisPayload}\n\n` +
     `Cycle ${cycle}: ${failures.length === 0 ? 'All tasks succeeded.' : `${failures.length} failures detected.`} ` +
     `Mark iteration_complete=true if the venture milestone is substantially achieved.`,
-    { jsonMode: true, maxTokens: 3000 },
+    { jsonMode: true, maxTokens: 3000, fixtureKey: 'monitor:diagnose' },
   );
 
   const parsed = parseModelJson(raw) as Record<string, unknown>;

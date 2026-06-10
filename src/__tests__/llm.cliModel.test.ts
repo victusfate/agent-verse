@@ -4,7 +4,7 @@ import { CliModel } from '../llm/cli.js';
 describe('CliModel — subprocess round-trip', () => {
   it('returns stdout from a cat round-trip', async () => {
     const model = new CliModel('cat');
-    const result = await model.generate('system', 'hello world');
+    const { text: result } = await model.generate('system', 'hello world');
     expect(result).toContain('hello world');
   });
 
@@ -24,7 +24,7 @@ describe('CliModel — quoted argument parsing', () => {
   it('passes quoted arguments with spaces as a single token (DEBT-4)', async () => {
     // sh -c "echo hello" should produce "hello", not fail with broken quoting
     const model = new CliModel('sh -c "echo hello"');
-    const result = await model.generate('system', 'prompt');
+    const { text: result } = await model.generate('system', 'prompt');
     expect(result).toContain('hello');
   });
 });
@@ -32,7 +32,7 @@ describe('CliModel — quoted argument parsing', () => {
 describe('CliModel — ANSI stripping', () => {
   it('strips ANSI escape codes from output', async () => {
     const model = new CliModel('cat');
-    const result = await model.generate('system', '\x1B[32mgreen text\x1B[0m');
+    const { text: result } = await model.generate('system', '\x1B[32mgreen text\x1B[0m');
     expect(result).not.toMatch(/\x1B\[/);
     expect(result).toContain('green text');
   });

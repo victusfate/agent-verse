@@ -5,11 +5,10 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-
-const COMPANIES_DIR = 'companies';
+import { resolveCompaniesDir } from './paths.js';
 
 function ventureDir(companyId: string): string {
-  return path.join(COMPANIES_DIR, companyId);
+  return path.join(resolveCompaniesDir(), companyId);
 }
 
 function ensureDir(companyId: string): void {
@@ -28,6 +27,14 @@ export function readContextFramework(companyId: string): Record<string, unknown>
   const p = path.join(ventureDir(companyId), 'context_framework.json');
   if (!fs.existsSync(p)) return {};
   return JSON.parse(fs.readFileSync(p, 'utf-8')) as Record<string, unknown>;
+}
+
+/** Accumulate estimated LLM spend into the venture's tokens_consumed_usd. */
+export function addConsumedCost(companyId: string, costUsd: number): void {
+  if (costUsd <= 0) return;
+  const ctx = readContextFramework(companyId);
+  const consumed = Number(ctx['tokens_consumed_usd'] ?? 0);
+  writeContextFramework(companyId, { ...ctx, tokens_consumed_usd: consumed + costUsd });
 }
 
 export function writeSkills(companyId: string, content: string): void {

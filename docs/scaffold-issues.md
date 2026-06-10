@@ -53,3 +53,42 @@ ours=$(mktemp); base=$(mktemp); theirs=$(mktemp)
 ---
 
 *Identified during bootstrap of `victusfate/agent-verse` @ sync SHA `3efb293`. Fixes should land in `victusfate/scaffold` so all downstream repos inherit them.*
+
+---
+
+## Quality audit findings (2026-06-09, sync SHA `cddbe59`)
+
+Found during the full-codebase quality audit (`docs/quality-modest-maxwell-6PD3C/design.md`,
+findings F-35–F-37). These live in scaffold-owned files, so the fixes belong upstream.
+
+**F-35 — `splitRow`/`parseResolver` duplicated across scaffold scripts**
+`scripts/check-resolvable.mjs` and `scripts/update-readme-skills.mjs` carry near-verbatim
+copies of the RESOLVER.md table parser (update-readme's copy has already lost the
+malformed-row error reporting). Extract a shared `scripts/lib/resolver.mjs` and import it
+from both. (`tools/hoist-skill`'s standalone copy is deliberate — it is fetched into
+consumer repos — and is exempt; consider a one-line comment saying so.)
+
+**F-36 — agent-authoring-requirements §6 checklist violations**
+- `tools/hoist-skill/run` and `test` are not executable (`-rw-r--r--`); §2 requires `+x`.
+- Unknown/misspelled flags are silently ignored (e.g. `--harnes cursor` emits claude);
+  §2 requires rejecting malformed input non-zero.
+- `bin/bootstrap.sh` and `bin/sync-from-scaffold.sh` use repo-root-relative paths without
+  resolving the root (`git rev-parse --show-toplevel`); run from a subdirectory they
+  create nested `bin/` dirs or write files into the subdir (§2a).
+- `bin/bootstrap.sh` unconditionally overwrites an existing `bin/sync-from-scaffold.sh`
+  (no `.scaffold-keep` check or sidecar), bypassing the clobber-safe contract.
+- `"${files[@]}"` under `set -u` breaks on bash 3.x (macOS default for the documented
+  `curl | bash` audience) when the manifest is empty.
+- No isolated test or documented acceptance check exists for either bin entrypoint.
+
+**F-37 — minor efficiency nits**
+- `tools/hoist-skill` (pre-refactor `run`, now `hoist.mjs`): `registry.find(...)` inside
+  loops — build a `Map` by name once after `parseResolver`.
+- `scripts/update-readme-skills.mjs` reads `README.md` from disk twice (once for content,
+  once for the staleness compare) — capture the first read.
+
+**Sync bug observed during `cddbe59` sync (one-off, worth a guard)**
+A re-run of `bin/sync-from-scaffold.sh` after a conflict-resolution commit appended a
+duplicate section to `scripts/check-resolvable.mjs` (duplicate `frontmatterDescription`
+declaration → SyntaxError). Restored from `scaffold/main`. The three-way merge should
+not produce duplicated content when the local file already matches the incoming base.

@@ -20,7 +20,7 @@ describe.skipIf(skip)('CLI agent smoke test', () => {
   beforeEach(() => {
     origCwd = process.cwd();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'av-cli-smoke-'));
-    process.chdir(tmpDir);
+    process.env['COMPANIES_DIR'] = path.join(tmpDir, 'companies');
     fs.mkdirSync(path.join(tmpDir, 'companies', 'smoke-co'), { recursive: true });
     fs.writeFileSync(
       path.join(tmpDir, 'companies', 'smoke-co', 'context_framework.json'),
@@ -30,7 +30,7 @@ describe.skipIf(skip)('CLI agent smoke test', () => {
   });
 
   afterEach(() => {
-    process.chdir(origCwd);
+    delete process.env['COMPANIES_DIR'];
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -39,7 +39,7 @@ describe.skipIf(skip)('CLI agent smoke test', () => {
     const model = await createModel(`cli:${CLI_CMD}`);
     expect(model.provider).toBe('cli');
 
-    const result = await model.generate(
+    const { text: result } = await model.generate(
       'You are the Engineering-Agent. Respond with a JSON object.',
       JSON.stringify({
         deliverable: 'Describe a REST API design in one sentence.',

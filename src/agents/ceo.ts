@@ -6,7 +6,7 @@
 import { BrainInitSchema, OperatorTaskSchema, type OperatorTask, type VenturePayload } from '../schemas.js';
 import { withJsonSchema, parseModelJson, createModel } from '../llm/index.js';
 import * as brain from '../companyBrain.js';
-import { initLedger, record } from '../ledger.js';
+import { record } from '../ledger.js';
 
 const SYSTEM_PROMPT = `You are the CEO-Agent of an autonomous corporate AI ecosystem.
 
@@ -35,14 +35,13 @@ export async function run(venture: VenturePayload): Promise<[string, OperatorTas
   const companyId = venture.company_name.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
   console.log(`[CEO-Agent] Provisioning company: ${companyId}`);
 
-  initLedger();
   record(companyId, 'company.created', { venture }, 'ceo');
 
   const model = await createModel();
-  const raw = await model.generate(
+  const { text: raw } = await model.generate(
     withJsonSchema(SYSTEM_PROMPT, SCHEMA_HINT),
     `Initialise company for this venture:\n\n${JSON.stringify(venture, null, 2)}`,
-    { jsonMode: true, maxTokens: 2048 },
+    { jsonMode: true, maxTokens: 2048, fixtureKey: 'ceo:init' },
   );
 
   const init = BrainInitSchema.parse(parseModelJson(raw));

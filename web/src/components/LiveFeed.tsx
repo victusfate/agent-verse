@@ -15,7 +15,6 @@ export function LiveFeed({ events, onSelect }: Props) {
             key={ev.id}
             data-testid="feed-row"
             onClick={() => onSelect(ev)}
-            onDoubleClick={() => onSelect(ev)}
             style={{ cursor: 'pointer' }}
           >
             <span data-testid="event-ts">{ev.ts}</span>
