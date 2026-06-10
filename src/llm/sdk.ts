@@ -9,6 +9,37 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { Model, LlmRequestOptions, GenerateResult } from './index.js';
 
+type ErrorSubtype =
+  | 'error_during_execution'
+  | 'error_max_turns'
+  | 'error_max_budget_usd'
+  | 'error_max_structured_output_retries';
+
+const SUBTYPE_REASON: Record<ErrorSubtype, string> = {
+  error_max_budget_usd: 'session budget exceeded',
+  error_max_turns: 'session exceeded max turns',
+  error_during_execution: 'error during execution',
+  error_max_structured_output_retries: 'structured output retries exhausted',
+};
+
+/**
+ * A session that ended on an error subtype. Carries the subtype so callers
+ * can distinguish budget exhaustion from turn caps, and the actual cost so
+ * a failed session is still charged to the venture.
+ */
+export class SdkSessionError extends Error {
+  readonly subtype: ErrorSubtype;
+  readonly costUsd: number;
+
+  constructor(subtype: ErrorSubtype, costUsd: number, details: string[]) {
+    const detail = details.length > 0 ? `: ${details.join('; ')}` : '';
+    super(`SDK session failed — ${SUBTYPE_REASON[subtype]}${detail}`);
+    this.name = 'SdkSessionError';
+    this.subtype = subtype;
+    this.costUsd = costUsd;
+  }
+}
+
 export class SdkModel implements Model {
   readonly provider = 'sdk' as const;
   readonly id: string;
@@ -44,7 +75,7 @@ export class SdkModel implements Model {
     for await (const message of stream) {
       if (message.type !== 'result') continue;
       if (message.subtype !== 'success') {
-        throw new Error(`SDK session failed: ${message.subtype}`);
+        throw new SdkSessionError(message.subtype, message.total_cost_usd, message.errors);
       }
       return {
         text: message.result,

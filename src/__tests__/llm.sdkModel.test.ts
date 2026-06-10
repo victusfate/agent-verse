@@ -81,6 +81,56 @@ describe('SdkModel', () => {
     });
   });
 
+  it('rejects with a budget-tagged error carrying actual cost when the session hits maxBudgetUsd', async () => {
+    queryMock.mockReturnValue(sdkStream([{
+      type: 'result',
+      subtype: 'error_max_budget_usd',
+      errors: ['budget exceeded'],
+      total_cost_usd: 5.01,
+      usage: { input_tokens: 50_000, output_tokens: 9_000 },
+    }]));
+
+    const { createModel } = await import('../llm/index.js');
+    const { SdkSessionError } = await import('../llm/sdk.js');
+    const model = await createModel('claude-sonnet-4-6', 'sdk');
+
+    const err = await model.generate('s', 'p').then(
+      () => { throw new Error('expected rejection'); },
+      (e: unknown) => e,
+    );
+
+    expect(err).toBeInstanceOf(SdkSessionError);
+    const sessionErr = err as InstanceType<typeof SdkSessionError>;
+    expect(sessionErr.subtype).toBe('error_max_budget_usd');
+    expect(sessionErr.costUsd).toBe(5.01);
+    expect(sessionErr.message).toContain('budget');
+  });
+
+  it('rejects with a turns-tagged error when the session hits maxTurns', async () => {
+    queryMock.mockReturnValue(sdkStream([{
+      type: 'result',
+      subtype: 'error_max_turns',
+      errors: [],
+      total_cost_usd: 0.9,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    }]));
+
+    const { createModel } = await import('../llm/index.js');
+    const { SdkSessionError } = await import('../llm/sdk.js');
+    const model = await createModel('claude-sonnet-4-6', 'sdk');
+
+    const err = await model.generate('s', 'p').then(
+      () => { throw new Error('expected rejection'); },
+      (e: unknown) => e,
+    );
+
+    expect(err).toBeInstanceOf(SdkSessionError);
+    const sessionErr = err as InstanceType<typeof SdkSessionError>;
+    expect(sessionErr.subtype).toBe('error_max_turns');
+    expect(sessionErr.costUsd).toBe(0.9);
+    expect(sessionErr.message).toContain('turns');
+  });
+
   it('omits session-scoped options when no session context is given', async () => {
     queryMock.mockReturnValue(sdkStream([successResult()]));
 
