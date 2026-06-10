@@ -6,10 +6,13 @@
  * Task 4.3 — Code hot-fix:         stub (would open a PR in production).
  * Task 4.4 — Brain Synthesis:      rewrites skills.md with improvements learned this cycle.
  */
+import path from 'node:path';
 import { MonitorReportSchema, type MonitorReport, type OperatorTask } from '../schemas.js';
 import { withJsonSchema, parseModelJson, createModel } from '../llm/index.js';
 import * as brain from '../companyBrain.js';
 import { record, queryFailures } from '../ledger.js';
+import { resolveCompaniesDir } from '../paths.js';
+import { readMostlySession } from './agentSession.js';
 
 const SYSTEM_PROMPT = `You are the Monitor-Agent — an asynchronous supervisory intelligence.
 
@@ -61,7 +64,12 @@ export async function run(
     `Analyse this execution cycle and diagnose any friction:\n\n${analysisPayload}\n\n` +
     `Cycle ${cycle}: ${failures.length === 0 ? 'All tasks succeeded.' : `${failures.length} failures detected.`} ` +
     `Mark iteration_complete=true if the venture milestone is substantially achieved.`,
-    { jsonMode: true, maxTokens: 3000, fixtureKey: 'monitor:diagnose' },
+    {
+      jsonMode: true,
+      maxTokens: 3000,
+      fixtureKey: 'monitor:diagnose',
+      ...readMostlySession(model, path.join(resolveCompaniesDir(), companyId), ['Read', 'Glob', 'Grep']),
+    },
   );
 
   const parsed = parseModelJson(raw) as Record<string, unknown>;
