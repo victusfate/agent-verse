@@ -4,7 +4,27 @@
  * Capable of driving OpenAI, Anthropic, Google Gemini, and Local/Custom LLMs (Ollama).
  */
 
-export type LlmProviderType = 'google' | 'openai' | 'anthropic' | 'local' | 'cli' | 'simulated';
+import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
+
+export type LlmProviderType = 'google' | 'openai' | 'anthropic' | 'local' | 'cli' | 'simulated' | 'sdk';
+
+/**
+ * Per-turn execution scope for the sdk runtime (Claude Agent SDK sessions).
+ * Meaningful only to SdkModel; other providers ignore it (same pattern as
+ * fixtureKey for the simulated provider).
+ */
+export interface SessionContext {
+  /** Working directory for the session — the company dir for agent turns. */
+  cwd: string;
+  /** Tools the session may use, e.g. ['Read', 'Write', 'Bash']. */
+  allowedTools: string[];
+  /** Cap on agentic turns within the session. */
+  maxTurns: number;
+  /** Structural budget cap; the SDK stops the session at this spend. */
+  maxBudgetUsd?: number;
+  /** Tool gate callback — hosts the policy/supervisor risk gate. */
+  canUseTool?: CanUseTool;
+}
 
 export interface LlmRequestOptions {
   /**
@@ -29,6 +49,11 @@ export interface LlmRequestOptions {
    * Ignored by real providers.
    */
   fixtureKey?: string;
+
+  /**
+   * Session scope for the sdk runtime. Ignored by all other providers.
+   */
+  session?: SessionContext;
 }
 
 export interface TokenUsage {
@@ -41,6 +66,8 @@ export interface GenerateResult {
   text: string;
   /** Token usage as reported by the provider SDK, when available. */
   usage?: TokenUsage;
+  /** Actual spend reported by the runtime (sdk only). Preferred over estimates. */
+  costUsd?: number;
 }
 
 export interface Model {
@@ -136,6 +163,10 @@ async function instantiate(provider: LlmProviderType, id: string): Promise<Model
     case 'cli': {
       const { CliModel } = await import('./cli.js');
       return new CliModel(id);
+    }
+    case 'sdk': {
+      const { SdkModel } = await import('./sdk.js');
+      return new SdkModel(id);
     }
     case 'simulated': {
       const { SimulatedModel } = await import('./simulated.js');
