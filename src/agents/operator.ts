@@ -62,13 +62,18 @@ async function chargedGenerate(
 const OPERATOR_TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'];
 const OPERATOR_MAX_TURNS = 10;
 
-/** Session scope for an sdk-runtime operator turn: company dir + tool gate. */
-function operatorSession(task: OperatorTask, ctx: Record<string, unknown>): SessionContext {
-  const companyDir = path.join(resolveCompaniesDir(), task.company_id);
-  const budget = {
+/** Read the venture budget out of a context framework, with safe defaults. */
+function budgetFrom(ctx: Record<string, unknown>): { token_budget_usd: number; tokens_consumed_usd: number } {
+  return {
     token_budget_usd: Number(ctx['token_budget_usd'] ?? 50),
     tokens_consumed_usd: Number(ctx['tokens_consumed_usd'] ?? 0),
   };
+}
+
+/** Session scope for an sdk-runtime operator turn: company dir + tool gate. */
+function operatorSession(task: OperatorTask, ctx: Record<string, unknown>): SessionContext {
+  const companyDir = path.join(resolveCompaniesDir(), task.company_id);
+  const budget = budgetFrom(ctx);
   return {
     cwd: companyDir,
     allowedTools: OPERATOR_TOOLS,
@@ -114,10 +119,7 @@ interface PolicyOutcome {
  * also fails, the task is blocked — it never proceeds to tool execution ungated.
  */
 async function applyPolicy(task: OperatorTask, ctx: Record<string, unknown>, telem: Telem): Promise<PolicyOutcome> {
-  const budgetCtx = {
-    token_budget_usd: Number(ctx['token_budget_usd'] ?? 50),
-    tokens_consumed_usd: Number(ctx['tokens_consumed_usd'] ?? 0),
-  };
+  const budgetCtx = budgetFrom(ctx);
   const remaining = budgetCtx.token_budget_usd - budgetCtx.tokens_consumed_usd;
 
   let policy: PolicyDecision | null = null;

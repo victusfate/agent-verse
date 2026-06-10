@@ -30,7 +30,8 @@ export function claudeBinaryOnPath(): boolean {
   }
 }
 
-function parseRuntime(value: string, source: string): AgentRuntime {
+/** Validate a runtime name at a boundary (CLI flag, env var). */
+export function parseRuntime(value: string, source: string): AgentRuntime {
   if (value === 'sdk' || value === 'api') return value;
   throw new Error(`${source} must be 'sdk' or 'api', got '${value}'`);
 }

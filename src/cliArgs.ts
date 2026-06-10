@@ -4,7 +4,7 @@
  */
 import { parseArgs } from 'node:util';
 import { VenturePayloadSchema, type VenturePayload } from './schemas.js';
-import type { AgentRuntime } from './llm/runtime.js';
+import { parseRuntime, type AgentRuntime } from './llm/runtime.js';
 
 export interface CliArgs {
   seed?: string;
@@ -45,13 +45,8 @@ export function parseCliArgs(argv: string[]): CliArgs {
     venture = result.data;
   }
 
-  let runtime: AgentRuntime | undefined;
-  if (values.runtime !== undefined) {
-    if (values.runtime !== 'sdk' && values.runtime !== 'api') {
-      throw new Error(`--runtime must be 'sdk' or 'api', got '${values.runtime}'`);
-    }
-    runtime = values.runtime;
-  }
+  const runtime: AgentRuntime | undefined =
+    values.runtime !== undefined ? parseRuntime(values.runtime, '--runtime') : undefined;
 
   let maxCycles: number | undefined;
   if (values['max-cycles'] !== undefined) {
