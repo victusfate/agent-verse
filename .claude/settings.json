@@ -1,5 +1,6 @@
 {
-  "model": "claude-fable-5[1m]",
+  "model": "claude-opus-4-8[1m]",
+  "fallbackModel": ["claude-opus-4-8[1m]"],
   "hooks": {
     "SessionStart": [
       {
@@ -17,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/read-once/hook.sh"
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/read-once/hook.sh\"; [ -f \"$f\" ] && bash \"$f\" || exit 0"
           }
         ]
       }
